@@ -1,18 +1,20 @@
-// --- script.js (V5: 插槽置中版) ---
+// --- script.js (V7: 新計分規則版) ---
 
 // --- 1. 參數設定 ---
 const GRID_SIZE = 8;
-const TILE_SIZE = 40;  // 遊戲盤面格子大小
-const PREVIEW_TILE_SIZE = 24; // 下方預覽時的格子大小 (40 * 0.6)
+const TILE_SIZE = 40;  
+const PREVIEW_TILE_SIZE = 24; 
 const GAP = 2;
 const BOARD_COLOR = '#34495e'; 
 const EMPTY_COLOR = '#2c3e50'; 
 const BLOCK_COLOR = '#e74c3c'; 
+const CLEAR_COLOR = '#ffffff'; 
 
 // --- 2. 遊戲狀態 ---
 let grid = []; 
 let shapes = []; 
 let score = 0;
+let isAnimating = false; 
 
 let draggingShape = null; 
 let dragOffsetX = 0;
@@ -37,12 +39,14 @@ const scoreElement = document.getElementById('score');
 function initGame() {
     grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
     score = 0;
+    isAnimating = false;
     updateScore(0);
     generateShapes();
     drawBoard();
     bindInputEvents();
 }
 
+// --- 繪圖邏輯 ---
 function drawBoard() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = BOARD_COLOR;
@@ -50,16 +54,20 @@ function drawBoard() {
 
     for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
-            let x = c * TILE_SIZE + GAP;
-            let y = r * TILE_SIZE + GAP;
-            let size = TILE_SIZE - GAP * 2;
-            ctx.fillStyle = grid[r][c] === 1 ? BLOCK_COLOR : EMPTY_COLOR;
-            ctx.fillRect(x, y, size, size);
+            drawCell(r, c, grid[r][c] === 1 ? BLOCK_COLOR : EMPTY_COLOR);
         }
     }
 }
 
-// --- 修改重點：生成插槽與設定預覽大小 ---
+function drawCell(r, c, color) {
+    let x = c * TILE_SIZE + GAP;
+    let y = r * TILE_SIZE + GAP;
+    let size = TILE_SIZE - GAP * 2;
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, size, size);
+}
+
+// --- 方塊生成 ---
 function generateShapes() {
     shapeContainer.innerHTML = ''; 
     shapes = [];
@@ -67,21 +75,16 @@ function generateShapes() {
     for (let i = 0; i < 3; i++) {
         const template = SHAPE_TEMPLATES[Math.floor(Math.random() * SHAPE_TEMPLATES.length)];
         
-        // 1. 建立插槽 (Slot)
         const slot = document.createElement('div');
         slot.className = 'shape-slot';
 
-        // 2. 建立方塊
         const shapeCanvas = document.createElement('canvas');
         const rows = template.length;
         const cols = template[0].length;
         
-        // 設定 Canvas 解析度 (保持高畫質)
         shapeCanvas.width = cols * TILE_SIZE;
         shapeCanvas.height = rows * TILE_SIZE;
         shapeCanvas.className = 'shape-preview';
-        
-        // 設定 CSS 顯示大小 (縮小版預覽，避免撐開版面)
         shapeCanvas.style.width = (cols * PREVIEW_TILE_SIZE) + 'px';
         shapeCanvas.style.height = (rows * PREVIEW_TILE_SIZE) + 'px';
         
@@ -103,15 +106,17 @@ function generateShapes() {
             cols: cols
         };
 
-        // 3. 放入 DOM
-        slot.appendChild(shapeCanvas); // 方塊放入插槽
-        shapeContainer.appendChild(slot); // 插槽放入容器
+        slot.appendChild(shapeCanvas);
+        shapeContainer.appendChild(slot);
         shapes.push(shapeObj);
     }
 }
 
+// --- 互動事件 ---
 function bindInputEvents() {
     const startDrag = (e) => {
+        if (isAnimating) return; 
+
         const pos = getPointerPos(e);
         const target = document.elementFromPoint(pos.x, pos.y);
         const shape = shapes.find(s => s.element === target);
@@ -123,11 +128,9 @@ function bindInputEvents() {
             shape.element.classList.remove('shape-preview');
             shape.element.classList.add('shape-dragging');
             
-            // --- 修改重點：拖曳時恢復原尺寸 ---
             shape.element.style.width = (shape.cols * TILE_SIZE) + 'px';
             shape.element.style.height = (shape.rows * TILE_SIZE) + 'px';
             
-            // 設定抓取點為方塊中心 (完美手感)
             dragOffsetX = shape.element.width / 2;
             dragOffsetY = shape.element.height / 2;
 
@@ -158,14 +161,14 @@ function bindInputEvents() {
 
         if (canPlace(draggingShape.data, r, c)) {
             placeShape(draggingShape.data, r, c);
-            
-            // 移除時，把父層 slot 也清空或移除
-            // 因為 slot 是 flex 佈局，內容物移除後它會變空，這裡我們直接把 Canvas 移除即可
             draggingShape.element.remove();
             shapes = shapes.filter(s => s !== draggingShape);
             
-            checkLines();
-            if (shapes.length === 0) generateShapes();
+            const hasLines = checkAndAnimateLines();
+            
+            if (!hasLines && shapes.length === 0) {
+                generateShapes();
+            }
         } else {
             resetShapeStyle(draggingShape);
         }
@@ -187,8 +190,6 @@ function resetShapeStyle(shape) {
     shape.element.style.position = '';
     shape.element.style.left = '';
     shape.element.style.top = '';
-    
-    // --- 修改重點：放回去失敗時，縮回預覽大小 ---
     shape.element.style.width = (shape.cols * PREVIEW_TILE_SIZE) + 'px';
     shape.element.style.height = (shape.rows * PREVIEW_TILE_SIZE) + 'px';
 }
@@ -226,18 +227,17 @@ function placeShape(matrix, r, c) {
             }
         }
     }
-    score += 10;
-    updateScore(score);
+    // 修改點 1：移除這裡的 score += 10
     drawBoard();
 }
 
-function checkLines() {
-    let linesCleared = 0;
-    
+function checkAndAnimateLines() {
+    let linesToClearRows = [];
+    let linesToClearCols = [];
+
     for (let r = 0; r < GRID_SIZE; r++) {
         if (grid[r].every(val => val === 1)) {
-            grid[r].fill(0);
-            linesCleared++;
+            linesToClearRows.push(r);
         }
     }
 
@@ -250,17 +250,75 @@ function checkLines() {
             }
         }
         if (full) {
-            for (let r = 0; r < GRID_SIZE; r++) {
-                grid[r][c] = 0;
-            }
-            linesCleared++;
+            linesToClearCols.push(c);
         }
     }
 
-    if (linesCleared > 0) {
-        score += linesCleared * 100;
-        updateScore(score);
-        drawBoard();
+    if (linesToClearRows.length > 0 || linesToClearCols.length > 0) {
+        runClearAnimation(linesToClearRows, linesToClearCols);
+        return true; 
+    }
+    return false;
+}
+
+function runClearAnimation(rows, cols) {
+    isAnimating = true; 
+    let opacity = 1.0; 
+    
+    function animate() {
+        opacity -= 0.1; 
+
+        if (opacity <= 0) {
+            finalizeClear(rows, cols);
+        } else {
+            drawBoard(); 
+            ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`; 
+            
+            rows.forEach(r => {
+                for(let c=0; c<GRID_SIZE; c++) {
+                    let x = c * TILE_SIZE + GAP;
+                    let y = r * TILE_SIZE + GAP;
+                    let size = TILE_SIZE - GAP * 2;
+                    ctx.fillRect(x, y, size, size);
+                }
+            });
+
+            cols.forEach(c => {
+                for(let r=0; r<GRID_SIZE; r++) {
+                    let x = c * TILE_SIZE + GAP;
+                    let y = r * TILE_SIZE + GAP;
+                    let size = TILE_SIZE - GAP * 2;
+                    ctx.fillRect(x, y, size, size);
+                }
+            });
+
+            requestAnimationFrame(animate); 
+        }
+    }
+    
+    animate();
+}
+
+function finalizeClear(rows, cols) {
+    // 真正清除資料
+    rows.forEach(r => grid[r].fill(0));
+    cols.forEach(c => {
+        for(let r=0; r<GRID_SIZE; r++) grid[r][c] = 0;
+    });
+
+    // 修改點 2：新的計分邏輯
+    const totalLines = rows.length + cols.length;
+    if (totalLines > 0) {
+        // 公式：10 * (連線數的平方)
+        score += 10 * Math.pow(totalLines, 2);
+    }
+
+    updateScore(score);
+    isAnimating = false; 
+    drawBoard(); 
+
+    if (shapes.length === 0) {
+        generateShapes();
     }
 }
 
