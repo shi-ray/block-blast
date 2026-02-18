@@ -1,42 +1,54 @@
+/* --- style.css --- */
 body {
     margin: 0;
     padding: 0;
-    background-color: #2c3e50; /* 深藍色背景 */
+    background-color: #2c3e50;
     color: white;
     font-family: Arial, sans-serif;
     display: flex;
     justify-content: center;
     align-items: center;
     height: 100vh;
-    overflow: hidden; /* 防止捲動 */
+    overflow: hidden;
 }
 
 #game-container {
     text-align: center;
     width: 100%;
-    max-width: 400px; /* 限制最大寬度，模擬手機 */
-}
-
-.header {
-    margin-bottom: 20px;
+    max-width: 400px;
+    position: relative; /* 讓絕對定位的方塊以此為基準 */
 }
 
 canvas {
-    background-color: #34495e; /* 網格背景色 */
+    background-color: #34495e;
     border-radius: 8px;
     box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-    touch-action: none; /* 關鍵：防止手機瀏覽器預設的滑動行為 */
+    touch-action: none; /* 防止手機滑動 */
 }
 
 #shape-container {
-    margin-top: 30px;
+    margin-top: 20px;
     display: flex;
-    justify-content: space-around; /* 讓三個方塊平均分佈 */
-    height: 100px;
+    justify-content: center; /* 置中 */
+    align-items: center;
+    height: 120px;
+    gap: 15px; /* 方塊之間的距離 */
 }
 
+/* 方塊樣式：預設縮小 0.6 倍，以免塞不下 */
 .shape-preview {
-    width: 80px;
-    height: 80px;
-    /* border: 1px solid #555; 測試用邊框，可拿掉 */
+    transform: scale(0.6); 
+    transition: transform 0.1s; /* 讓變大變小有動畫 */
+    cursor: pointer;
+    /* 刪除原本的 width: 80px 和 height: 80px，讓它自然呈現 */
+}
+
+/* 當方塊被拖曳時的樣式 (在 JS 中會切換) */
+.shape-dragging {
+    position: absolute;
+    z-index: 1000;
+    opacity: 0.9;
+    pointer-events: none; /* 讓滑鼠可以穿透方塊偵測下方的網格 */
+    transform: scale(1.0) !important; /* 拖起來時變回原大小 */
+    filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5)); /* 加陰影 */
 }
