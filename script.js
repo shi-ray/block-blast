@@ -1,8 +1,9 @@
-// --- script.js (V3: 修正錯位與縮放版) ---
+// --- script.js (V5: 插槽置中版) ---
 
 // --- 1. 參數設定 ---
 const GRID_SIZE = 8;
-const TILE_SIZE = 40; 
+const TILE_SIZE = 40;  // 遊戲盤面格子大小
+const PREVIEW_TILE_SIZE = 24; // 下方預覽時的格子大小 (40 * 0.6)
 const GAP = 2;
 const BOARD_COLOR = '#34495e'; 
 const EMPTY_COLOR = '#2c3e50'; 
@@ -13,12 +14,10 @@ let grid = [];
 let shapes = []; 
 let score = 0;
 
-// 拖曳相關變數
 let draggingShape = null; 
 let dragOffsetX = 0;
 let dragOffsetY = 0;
 
-// 方塊形狀定義
 const SHAPE_TEMPLATES = [
     [[1]], 
     [[1, 1, 1, 1]], 
@@ -30,13 +29,11 @@ const SHAPE_TEMPLATES = [
     [[0, 1, 1], [1, 1, 0]]
 ];
 
-// --- 3. DOM 元素 ---
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const shapeContainer = document.getElementById('shape-container');
 const scoreElement = document.getElementById('score');
 
-// --- 4. 初始化 ---
 function initGame() {
     grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
     score = 0;
@@ -46,7 +43,6 @@ function initGame() {
     bindInputEvents();
 }
 
-// --- 5. 繪圖邏輯 ---
 function drawBoard() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = BOARD_COLOR;
@@ -63,20 +59,31 @@ function drawBoard() {
     }
 }
 
-// --- 6. 方塊生成 ---
+// --- 修改重點：生成插槽與設定預覽大小 ---
 function generateShapes() {
     shapeContainer.innerHTML = ''; 
     shapes = [];
 
     for (let i = 0; i < 3; i++) {
         const template = SHAPE_TEMPLATES[Math.floor(Math.random() * SHAPE_TEMPLATES.length)];
+        
+        // 1. 建立插槽 (Slot)
+        const slot = document.createElement('div');
+        slot.className = 'shape-slot';
+
+        // 2. 建立方塊
         const shapeCanvas = document.createElement('canvas');
         const rows = template.length;
         const cols = template[0].length;
         
+        // 設定 Canvas 解析度 (保持高畫質)
         shapeCanvas.width = cols * TILE_SIZE;
         shapeCanvas.height = rows * TILE_SIZE;
         shapeCanvas.className = 'shape-preview';
+        
+        // 設定 CSS 顯示大小 (縮小版預覽，避免撐開版面)
+        shapeCanvas.style.width = (cols * PREVIEW_TILE_SIZE) + 'px';
+        shapeCanvas.style.height = (rows * PREVIEW_TILE_SIZE) + 'px';
         
         const sCtx = shapeCanvas.getContext('2d');
         sCtx.fillStyle = BLOCK_COLOR;
@@ -96,12 +103,13 @@ function generateShapes() {
             cols: cols
         };
 
-        shapeContainer.appendChild(shapeCanvas);
+        // 3. 放入 DOM
+        slot.appendChild(shapeCanvas); // 方塊放入插槽
+        shapeContainer.appendChild(slot); // 插槽放入容器
         shapes.push(shapeObj);
     }
 }
 
-// --- 7. 拖曳與放置核心邏輯 (修正版) ---
 function bindInputEvents() {
     const startDrag = (e) => {
         const pos = getPointerPos(e);
@@ -115,15 +123,13 @@ function bindInputEvents() {
             shape.element.classList.remove('shape-preview');
             shape.element.classList.add('shape-dragging');
             
-            // === 修改開始 ===
-            // 舊程式碼是計算 offset，我們改為直接抓取方塊中心
-            // shape.element.width 是方塊的實際寬度 (因為我們是用 canvas 畫的)
+            // --- 修改重點：拖曳時恢復原尺寸 ---
+            shape.element.style.width = (shape.cols * TILE_SIZE) + 'px';
+            shape.element.style.height = (shape.rows * TILE_SIZE) + 'px';
+            
+            // 設定抓取點為方塊中心 (完美手感)
             dragOffsetX = shape.element.width / 2;
             dragOffsetY = shape.element.height / 2;
-
-            // (選用) 如果想要方塊出現在手指上方一點點(才不會被手擋住)，可以把 Y 再多減一點
-            // dragOffsetY += 50; 
-            // === 修改結束 ===
 
             moveShape(pos.x, pos.y);
         }
@@ -139,28 +145,25 @@ function bindInputEvents() {
     const endDrag = (e) => {
         if (!draggingShape) return;
 
-        // 修正步驟 C: 取得畫布目前的縮放比例 (解決 RWD 錯位問題)
-        // 因為手機上畫布可能只有 300px 寬，但內部邏輯是 320px
         const boardRect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / boardRect.width;
         const scaleY = canvas.height / boardRect.height;
-
         const shapeRect = draggingShape.element.getBoundingClientRect();
 
-        // 計算相對於畫布左上角的座標 (並乘上縮放比例)
         const relativeX = (shapeRect.left - boardRect.left) * scaleX;
         const relativeY = (shapeRect.top - boardRect.top) * scaleY;
 
-        // 轉換成網格索引
-        // 這裡加上 TILE_SIZE / 2 是為了讓判定更寬容 (以方塊中心點為主)
-        // 但最精準的是直接除
         const c = Math.round(relativeX / TILE_SIZE);
         const r = Math.round(relativeY / TILE_SIZE);
 
         if (canPlace(draggingShape.data, r, c)) {
             placeShape(draggingShape.data, r, c);
+            
+            // 移除時，把父層 slot 也清空或移除
+            // 因為 slot 是 flex 佈局，內容物移除後它會變空，這裡我們直接把 Canvas 移除即可
             draggingShape.element.remove();
             shapes = shapes.filter(s => s !== draggingShape);
+            
             checkLines();
             if (shapes.length === 0) generateShapes();
         } else {
@@ -178,26 +181,28 @@ function bindInputEvents() {
     document.addEventListener('touchend', endDrag);
 }
 
+function resetShapeStyle(shape) {
+    shape.element.classList.remove('shape-dragging');
+    shape.element.classList.add('shape-preview');
+    shape.element.style.position = '';
+    shape.element.style.left = '';
+    shape.element.style.top = '';
+    
+    // --- 修改重點：放回去失敗時，縮回預覽大小 ---
+    shape.element.style.width = (shape.cols * PREVIEW_TILE_SIZE) + 'px';
+    shape.element.style.height = (shape.rows * PREVIEW_TILE_SIZE) + 'px';
+}
+
 function getPointerPos(e) {
     if (e.touches && e.touches.length > 0) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
     return { x: e.clientX, y: e.clientY };
 }
 
 function moveShape(x, y) {
-    // 這裡直接設定 left/top，會依賴 position: fixed (在 CSS .shape-dragging 定義)
-    // 為了確保位置正確，我們將其提升到 body 層級或確保它是 fixed
     draggingShape.element.style.left = (x - dragOffsetX) + 'px';
     draggingShape.element.style.top = (y - dragOffsetY) + 'px';
 }
 
-function resetShapeStyle(shape) {
-    shape.element.classList.remove('shape-dragging');
-    shape.element.classList.add('shape-preview');
-    shape.element.style.left = '';
-    shape.element.style.top = '';
-}
-
-// --- 8. 遊戲規則 ---
 function canPlace(matrix, r, c) {
     for (let i = 0; i < matrix.length; i++) {
         for (let j = 0; j < matrix[0].length; j++) {
@@ -229,7 +234,6 @@ function placeShape(matrix, r, c) {
 function checkLines() {
     let linesCleared = 0;
     
-    // 檢查橫排
     for (let r = 0; r < GRID_SIZE; r++) {
         if (grid[r].every(val => val === 1)) {
             grid[r].fill(0);
@@ -237,7 +241,6 @@ function checkLines() {
         }
     }
 
-    // 檢查直排
     for (let c = 0; c < GRID_SIZE; c++) {
         let full = true;
         for (let r = 0; r < GRID_SIZE; r++) {
