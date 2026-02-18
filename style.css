@@ -1,4 +1,4 @@
-/* --- style.css (V5: 完美置中版) --- */
+/* --- style.css (V8: Game Over UI) --- */
 
 body {
     margin: 0;
@@ -25,6 +25,29 @@ body {
     margin-bottom: 15px;
 }
 
+.header h1 {
+    margin: 0 0 10px 0;
+    font-size: 2rem;
+    letter-spacing: 2px;
+    text-shadow: 2px 2px 0px #000;
+}
+
+.score-board {
+    display: flex;
+    justify-content: center;
+    gap: 20px; /* 兩個分數之間的距離 */
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+#score {
+    color: #fff;
+}
+
+#best-score {
+    color: #f1c40f; /* 金黃色，代表最高榮耀 */
+}
+
 canvas {
     border-radius: 8px;
     touch-action: none; 
@@ -40,31 +63,25 @@ canvas {
 #shape-container {
     margin-top: 25px;
     display: flex;
-    /* 移除 gap，改用插槽平均分配 */
     justify-content: space-between; 
     align-items: center;
     height: 100px;
-    padding: 0 10px; /* 兩側留一點邊距 */
+    padding: 0 10px;
 }
 
-/* === 新增：插槽設定 === */
 .shape-slot {
-    flex: 1; /* 三個插槽平分寬度 */
+    flex: 1;
     display: flex;
-    justify-content: center; /* 內容水平置中 */
-    align-items: center;     /* 內容垂直置中 */
+    justify-content: center;
+    align-items: center;
     height: 100%;
-    /* border: 1px dashed #555; 開發時可打開來看邊界，上線關掉 */
 }
 
-/* 方塊預覽樣式 */
 .shape-preview {
     cursor: grab;
     background-color: transparent;
-    /* 這裡不需要 transform scale 了，我們改由 JS 控制 style.width */
 }
 
-/* 拖曳中樣式 */
 .shape-dragging {
     position: fixed;
     z-index: 1000;
@@ -73,4 +90,66 @@ canvas {
     background-color: transparent;
     filter: drop-shadow(0 5px 15px rgba(0,0,0,0.4));
     cursor: grabbing;
+}
+
+/* === 新增：遊戲結束視窗樣式 === */
+#game-over-modal {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.85); /* 半透明黑底 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    border-radius: 8px;
+    backdrop-filter: blur(4px); /* 背景模糊特效 */
+}
+
+/* 用來隱藏視窗的 class */
+.hidden {
+    display: none !important;
+}
+
+.modal-content {
+    background: #34495e;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    border: 2px solid #e74c3c; /* 紅色邊框 */
+    animation: popIn 0.3s ease-out;
+}
+
+.modal-content h2 {
+    margin: 0 0 15px 0;
+    color: #e74c3c;
+    font-size: 2rem;
+}
+
+.modal-content p {
+    font-size: 1.2rem;
+    margin-bottom: 25px;
+}
+
+#restart-btn {
+    background-color: #e74c3c;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    font-size: 1.1rem;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: transform 0.1s, background-color 0.2s;
+}
+
+#restart-btn:active {
+    transform: scale(0.95);
+    background-color: #c0392b;
+}
+
+@keyframes popIn {
+    from { transform: scale(0.8); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
 }

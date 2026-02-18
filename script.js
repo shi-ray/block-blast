@@ -1,4 +1,4 @@
-// --- script.js (V7: 新計分規則版) ---
+// --- script.js (V9: 最高分紀錄版) ---
 
 // --- 1. 參數設定 ---
 const GRID_SIZE = 8;
@@ -14,6 +14,7 @@ const CLEAR_COLOR = '#ffffff';
 let grid = []; 
 let shapes = []; 
 let score = 0;
+let bestScore = 0; // 新增：最高分變數
 let isAnimating = false; 
 
 let draggingShape = null; 
@@ -35,18 +36,40 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const shapeContainer = document.getElementById('shape-container');
 const scoreElement = document.getElementById('score');
+const bestScoreElement = document.getElementById('best-score'); // 新增 DOM
+const gameOverModal = document.getElementById('game-over-modal');
+const finalScoreElement = document.getElementById('final-score');
+const restartBtn = document.getElementById('restart-btn');
 
 function initGame() {
     grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
     score = 0;
+    
+    // --- 新增：讀取最高分 ---
+    const savedBest = localStorage.getItem('blockBlastBest');
+    bestScore = savedBest ? parseInt(savedBest) : 0;
+    
     isAnimating = false;
+    
+    // 更新介面
     updateScore(0);
+    updateBestScore(bestScore);
+    
+    gameOverModal.classList.add('hidden');
+    
     generateShapes();
     drawBoard();
-    bindInputEvents();
+    
+    if (!window.gameInitialized) {
+        bindInputEvents();
+        window.gameInitialized = true;
+    }
 }
 
-// --- 繪圖邏輯 ---
+restartBtn.addEventListener('click', () => {
+    initGame();
+});
+
 function drawBoard() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = BOARD_COLOR;
@@ -67,7 +90,6 @@ function drawCell(r, c, color) {
     ctx.fillRect(x, y, size, size);
 }
 
-// --- 方塊生成 ---
 function generateShapes() {
     shapeContainer.innerHTML = ''; 
     shapes = [];
@@ -110,9 +132,9 @@ function generateShapes() {
         shapeContainer.appendChild(slot);
         shapes.push(shapeObj);
     }
+    checkGameOver();
 }
 
-// --- 互動事件 ---
 function bindInputEvents() {
     const startDrag = (e) => {
         if (isAnimating) return; 
@@ -166,8 +188,12 @@ function bindInputEvents() {
             
             const hasLines = checkAndAnimateLines();
             
-            if (!hasLines && shapes.length === 0) {
-                generateShapes();
+            if (!hasLines) {
+                if (shapes.length === 0) {
+                    generateShapes();
+                } else {
+                    checkGameOver();
+                }
             }
         } else {
             resetShapeStyle(draggingShape);
@@ -227,8 +253,34 @@ function placeShape(matrix, r, c) {
             }
         }
     }
-    // 修改點 1：移除這裡的 score += 10
     drawBoard();
+}
+
+function checkGameOver() {
+    if (shapes.length === 0) return; 
+
+    let canMove = false;
+    for (let s of shapes) {
+        for (let r = 0; r < GRID_SIZE; r++) {
+            for (let c = 0; c < GRID_SIZE; c++) {
+                if (canPlace(s.data, r, c)) {
+                    canMove = true;
+                    break;
+                }
+            }
+            if (canMove) break;
+        }
+        if (canMove) break;
+    }
+
+    if (!canMove) {
+        showGameOverScreen();
+    }
+}
+
+function showGameOverScreen() {
+    finalScoreElement.innerText = score;
+    gameOverModal.classList.remove('hidden'); 
 }
 
 function checkAndAnimateLines() {
@@ -300,16 +352,13 @@ function runClearAnimation(rows, cols) {
 }
 
 function finalizeClear(rows, cols) {
-    // 真正清除資料
     rows.forEach(r => grid[r].fill(0));
     cols.forEach(c => {
         for(let r=0; r<GRID_SIZE; r++) grid[r][c] = 0;
     });
 
-    // 修改點 2：新的計分邏輯
     const totalLines = rows.length + cols.length;
     if (totalLines > 0) {
-        // 公式：10 * (連線數的平方)
         score += 10 * Math.pow(totalLines, 2);
     }
 
@@ -319,11 +368,24 @@ function finalizeClear(rows, cols) {
 
     if (shapes.length === 0) {
         generateShapes();
+    } else {
+        checkGameOver(); 
     }
 }
 
+// --- 修改：分數更新時同步更新最高分 ---
 function updateScore(s) {
     scoreElement.innerText = `Score: ${s}`;
+    if (s > bestScore) {
+        bestScore = s;
+        updateBestScore(bestScore);
+        // 即時存檔
+        localStorage.setItem('blockBlastBest', bestScore);
+    }
+}
+
+function updateBestScore(s) {
+    bestScoreElement.innerText = `Best: ${s}`;
 }
 
 initGame();
