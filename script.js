@@ -112,17 +112,19 @@ function bindInputEvents() {
             e.preventDefault();
             draggingShape = shape;
             
-            // 修正步驟 A: 先變大，讓瀏覽器算出變大後的大小
             shape.element.classList.remove('shape-preview');
             shape.element.classList.add('shape-dragging');
             
-            // 修正步驟 B: 變大後，再計算滑鼠相對於方塊左上角的距離
-            // 這樣抓取點才不會跑掉
-            const rect = shape.element.getBoundingClientRect();
-            dragOffsetX = pos.x - rect.left;
-            dragOffsetY = pos.y - rect.top;
+            // === 修改開始 ===
+            // 舊程式碼是計算 offset，我們改為直接抓取方塊中心
+            // shape.element.width 是方塊的實際寬度 (因為我們是用 canvas 畫的)
+            dragOffsetX = shape.element.width / 2;
+            dragOffsetY = shape.element.height / 2;
 
-            // 立即移動一次，避免閃爍
+            // (選用) 如果想要方塊出現在手指上方一點點(才不會被手擋住)，可以把 Y 再多減一點
+            // dragOffsetY += 50; 
+            // === 修改結束 ===
+
             moveShape(pos.x, pos.y);
         }
     };

@@ -1,8 +1,9 @@
-/* --- style.css --- */
+/* --- style.css (V4: 方塊透明背景版) --- */
+
 body {
     margin: 0;
     padding: 0;
-    background-color: #2c3e50;
+    background-color: #2c3e50; /* 整個網頁的背景 */
     color: white;
     font-family: Arial, sans-serif;
     display: flex;
@@ -16,39 +17,58 @@ body {
     text-align: center;
     width: 100%;
     max-width: 400px;
-    position: relative; /* 讓絕對定位的方塊以此為基準 */
+    position: relative;
+    padding: 20px 0; /* 增加一點上下邊距 */
 }
 
+.header {
+    margin-bottom: 15px;
+}
+
+/* === 修改點 1: 通用 canvas 設定 === */
 canvas {
-    background-color: #34495e;
+    /* 移除這裡的 background-color 和 box-shadow */
     border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     touch-action: none; /* 防止手機滑動 */
+    display: block; /* 修正 canvas 底部可能出現的微小留白 */
+    margin: 0 auto; /* 讓 canvas 水平置中 */
+}
+
+/* === 修改點 2: 新增主網格專用設定 === */
+#gameCanvas {
+    background-color: #34495e; /* 深藍色背景只給主網格 */
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3); /* 陰影也只給主網格 */
 }
 
 #shape-container {
-    margin-top: 20px;
+    margin-top: 25px;
     display: flex;
-    justify-content: center; /* 置中 */
+    justify-content: center;
     align-items: center;
-    height: 120px;
-    gap: 15px; /* 方塊之間的距離 */
+    height: 100px; /* 固定高度區塊 */
+    gap: 20px;
 }
 
-/* 方塊樣式：預設縮小 0.6 倍，以免塞不下 */
+/* === 修改點 3: 小方塊設定 === */
+/* 預覽狀態 */
 .shape-preview {
     transform: scale(0.6); 
-    transition: transform 0.1s; /* 讓變大變小有動畫 */
-    cursor: pointer;
-    /* 刪除原本的 width: 80px 和 height: 80px，讓它自然呈現 */
+    transition: transform 0.1s; /* 只有放回去縮小時要有動畫 */
+    cursor: grab;
+    background-color: transparent;
 }
 
-/* 當方塊被拖曳時的樣式 (在 JS 中會切換) */
+/* 拖曳狀態 (被拿起來時) */
 .shape-dragging {
-    position: absolute;
+    position: fixed; 
     z-index: 1000;
     opacity: 0.9;
-    pointer-events: none; /* 讓滑鼠可以穿透方塊偵測下方的網格 */
-    transform: scale(1.0) !important; /* 拖起來時變回原大小 */
-    filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5)); /* 加陰影 */
+    pointer-events: none; 
+    transform: scale(1.0) !important;
+    background-color: transparent;
+    filter: drop-shadow(0 5px 15px rgba(0,0,0,0.4)); 
+    cursor: grabbing;
+    
+    /* === 新增這一行：移除拖曳時的動畫延遲，解決錯位 === */
+    transition: none; 
 }
