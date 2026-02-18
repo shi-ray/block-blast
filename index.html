@@ -2,17 +2,22 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>My Block Blast</title>
-    <style>
-        body { display: flex; flex-direction: column; align-items: center; background: #f0f0f0; }
-        canvas { background: #fff; border: 2px solid #333; margin-top: 20px; }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Block Blast Clone</h1>
-    <canvas id="gameCanvas" width="320" height="320"></canvas>
-    <p>拖放功能開發中...</p>
+    <div id="game-container">
+        <div class="header">
+            <h1>BLOCK BLAST</h1>
+            <div id="score">Score: 0</div>
+        </div>
+
+        <canvas id="gameCanvas" width="320" height="320"></canvas>
+
+        <div id="shape-container">
+            </div>
+    </div>
     <script src="script.js"></script>
 </body>
 </html>
