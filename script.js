@@ -1,9 +1,13 @@
 // --- 設定參數 ---
-const GRID_SIZE = 8;        // 8x8 網格
-const TILE_SIZE = 40;       // 每個格子 40px
-const GAP = 2;              // 格子間距
-const BOARD_COLOR = '#34495e'; 
-const EMPTY_COLOR = '#2c3e50';
+const GRID_SIZE = 8;
+const TILE_SIZE = 40;
+const GAP = 2;
+// 修改這裡：改成高對比顏色
+const BOARD_COLOR = '#000000';  // 純黑背景 (格線顏色)
+const EMPTY_COLOR = '#ffffff';  // 純白格子 (空位顏色)
+
+// --- 測試用 ---
+alert("JS 檔案已成功讀取！"); // 加入這行，重新整理網頁時應該要跳出視窗
 
 // --- 遊戲狀態 ---
 let grid = []; // 0=空, 1=有方塊
