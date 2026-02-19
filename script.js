@@ -1,11 +1,23 @@
+// --- script.js (V17: 五彩方塊 + 預覽白框 + 暴力驗證版) ---
+
+// --- 1. 參數設定 ---
 const GRID_SIZE = 8;
 const TILE_SIZE = 40;  
 const PREVIEW_TILE_SIZE = 24; 
 const GAP = 2;
 const BOARD_COLOR = '#34495e'; 
 const EMPTY_COLOR = '#2c3e50'; 
-const BLOCK_COLOR = '#e74c3c'; 
 
+// --- 新增：定義五種顏色 ---
+const COLORS = [
+    '#e74c3c', // 紅色 (Red)
+    '#e67e22', // 橙色 (Orange)
+    '#2ecc71', // 綠色 (Green)
+    '#3498db', // 藍色 (Blue)
+    '#9b59b6'  // 紫色 (Purple)
+];
+
+// --- 2. 遊戲狀態 ---
 let grid = []; 
 let shapes = []; 
 let score = 0;
@@ -15,47 +27,45 @@ let draggingShape = null;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
 
+let previewR = -1;
+let previewC = -1;
+let isPreviewValid = false;
+
+let previewClearRows = [];
+let previewClearCols = [];
+
 const ALL_SHAPES = [
-    [[1]],
-    [[1, 1]], [[1], [1]],
-    [[1, 1, 1]], [[1], [1], [1]],
-    [[1, 1, 1, 1]], [[1], [1], [1], [1]],
-    [[1, 1, 1, 1, 1]], [[1], [1], [1], [1], [1]],
-
-    [[1, 1], [1, 1]],
-    [[1, 1, 1], [1, 1, 1]],
-    [[1, 1], [1, 1], [1, 1]],
-    [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
-
-    [[1, 0], [1, 1]], [[0, 1], [1, 1]], [[1, 1], [1, 0]], [[1, 1], [0, 1]],
-    [[1, 0], [1, 0], [1, 1]],
-    [[0, 1], [0, 1], [1, 1]],
-    [[1, 1, 1], [1, 0, 0]], 
-    [[1, 1, 1], [0, 0, 1]],  
-
-    [[1, 1, 1], [0, 1, 0]],
-    [[0, 1, 0], [1, 1, 1]],
-    [[1, 0], [1, 1], [1, 0]],
+    [[1]], 
+    [[1, 1]], [[1], [1]], 
+    [[1, 1, 1]], [[1], [1], [1]], 
+    [[1, 1, 1, 1]], [[1], [1], [1], [1]], 
+    [[1, 1, 1, 1, 1]], [[1], [1], [1], [1], [1]], 
+    [[1, 1], [1, 1]], 
+    [[1, 1, 1], [1, 1, 1]], 
+    [[1, 1], [1, 1], [1, 1]], 
+    [[1, 1, 1], [1, 1, 1], [1, 1, 1]], 
+    [[1, 0], [1, 1]], [[0, 1], [1, 1]], [[1, 1], [1, 0]], [[1, 1], [0, 1]], 
+    [[1, 0], [1, 0], [1, 1]], 
+    [[0, 1], [0, 1], [1, 1]], 
+    [[1, 1, 1], [1, 0, 0]],   
+    [[1, 1, 1], [0, 0, 1]],   
+    [[1, 1, 1], [0, 1, 0]], 
+    [[0, 1, 0], [1, 1, 1]], 
+    [[1, 0], [1, 1], [1, 0]], 
     [[0, 1], [1, 1], [0, 1]], 
-
-    [[1, 1, 0], [0, 1, 1]],
+    [[1, 1, 0], [0, 1, 1]], 
     [[0, 1, 1], [1, 1, 0]], 
     [[1, 0], [1, 1], [0, 1]], 
-    [[0, 1], [1, 1], [1, 0]],
-
-    [[0, 1, 0], [1, 1, 1], [0, 1, 0]],
-    [[1, 0, 1], [1, 1, 1]],
-    [[1, 1, 1], [1, 0, 1]],
+    [[0, 1], [1, 1], [1, 0]], 
+    [[0, 1, 0], [1, 1, 1], [0, 1, 0]], 
+    [[1, 0, 1], [1, 1, 1]], 
+    [[1, 1, 1], [1, 0, 1]], 
     [[1, 1], [1, 0], [1, 0]], 
-    [[1, 0], [0, 1]],
-    [[0, 1], [1, 0]],
-    [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+    [[1, 0], [0, 1]], 
+    [[0, 1], [1, 0]], 
+    [[1, 0, 0], [0, 1, 0], [0, 0, 1]], 
     [[0, 0, 1], [0, 1, 0], [1, 0, 0]], 
-    [[1, 0, 0], [1, 1, 1], [0, 0, 1]], 
-    [[1, 1, 1], [1, 0, 0], [1, 0, 0]],
-    [[1, 1, 1], [0, 0, 1], [0, 0, 1]],
-    [[1, 0, 0], [1, 0, 0], [1, 1, 1]],
-    [[0, 0, 1], [0, 0, 1], [1, 1, 1]],
+    [[1, 0, 0], [1, 1, 1], [0, 0, 1]] 
 ];
 
 const canvas = document.getElementById('gameCanvas');
@@ -72,7 +82,7 @@ function initGame() {
     isAnimating = false;
     updateScore(0);
     gameOverModal.classList.add('hidden');
-    generateShapes();
+    generateShapes(); 
     drawBoard();
     
     if (!window.gameInitialized) {
@@ -85,6 +95,34 @@ restartBtn.addEventListener('click', () => {
     initGame();
 });
 
+function updatePreviewClears(r, c, matrix) {
+    previewClearRows = [];
+    previewClearCols = [];
+    if (!isPreviewValid) return;
+
+    let tempGrid = grid.map(row => [...row]);
+    
+    for (let i = 0; i < matrix.length; i++) {
+        for (let j = 0; j < matrix[0].length; j++) {
+            if (matrix[i][j] === 1) {
+                tempGrid[r + i][c + j] = 1; // 模擬放置時只要填 1 即可判斷連線
+            }
+        }
+    }
+
+    // --- 修改：連線判斷從 === 1 改為 !== 0 (相容顏色代碼) ---
+    for (let row = 0; row < GRID_SIZE; row++) {
+        if (tempGrid[row].every(val => val !== 0)) previewClearRows.push(row);
+    }
+    for (let col = 0; col < GRID_SIZE; col++) {
+        let full = true;
+        for (let row = 0; row < GRID_SIZE; row++) {
+            if (tempGrid[row][col] === 0) { full = false; break; }
+        }
+        if (full) previewClearCols.push(col);
+    }
+}
+
 function drawBoard() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = BOARD_COLOR;
@@ -92,17 +130,144 @@ function drawBoard() {
 
     for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
-            drawCell(r, c, grid[r][c] === 1 ? BLOCK_COLOR : EMPTY_COLOR);
+            // --- 修改：抓取真實顏色 ---
+            let cellValue = grid[r][c];
+            let isToBeCleared = cellValue !== 0 && (previewClearRows.includes(r) || previewClearCols.includes(c));
+            
+            drawCell(r, c, cellValue !== 0 ? cellValue : EMPTY_COLOR, isToBeCleared ? '#ffffff' : null);
         }
+    }
+
+    if (draggingShape && isPreviewValid) {
+        // --- 修改：使用方塊本身的顏色，並加入半透明度 ---
+        ctx.globalAlpha = 0.5;
+        const matrix = draggingShape.data;
+        for (let i = 0; i < matrix.length; i++) {
+            for (let j = 0; j < matrix[0].length; j++) {
+                if (matrix[i][j] === 1) {
+                    drawCell(previewR + i, previewC + j, draggingShape.color);
+                }
+            }
+        }
+        ctx.globalAlpha = 1.0; // 畫完後重置透明度
     }
 }
 
-function drawCell(r, c, color) {
+function drawCell(r, c, color, borderColor = null) {
     let x = c * TILE_SIZE + GAP;
     let y = r * TILE_SIZE + GAP;
     let size = TILE_SIZE - GAP * 2;
     ctx.fillStyle = color;
     ctx.fillRect(x, y, size, size);
+
+    if (borderColor) {
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 1, y + 1, size - 2, size - 2);
+    }
+}
+
+function calculateGridPosition(pointerX, pointerY) {
+    const boardRect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / boardRect.width;
+    const scaleY = canvas.height / boardRect.height;
+    
+    const relativeX = (pointerX - dragOffsetX - boardRect.left) * scaleX;
+    const relativeY = (pointerY - dragOffsetY - boardRect.top) * scaleY;
+
+    const c = Math.round(relativeX / TILE_SIZE);
+    const r = Math.round(relativeY / TILE_SIZE);
+    return { r, c };
+}
+
+function bindInputEvents() {
+    const startDrag = (e) => {
+        if (isAnimating) return; 
+
+        const pos = getPointerPos(e);
+        const target = document.elementFromPoint(pos.x, pos.y);
+        const shape = shapes.find(s => s.element === target);
+
+        if (shape) {
+            e.preventDefault();
+            draggingShape = shape;
+            shape.element.classList.remove('shape-preview');
+            shape.element.classList.add('shape-dragging');
+            
+            shape.element.style.width = (shape.cols * TILE_SIZE) + 'px';
+            shape.element.style.height = (shape.rows * TILE_SIZE) + 'px';
+            
+            dragOffsetX = shape.element.width / 2;
+            dragOffsetY = shape.element.height / 2;
+            moveShape(pos.x, pos.y);
+
+            const gridPos = calculateGridPosition(pos.x, pos.y);
+            previewR = gridPos.r;
+            previewC = gridPos.c;
+            isPreviewValid = canPlace(grid, draggingShape.data, previewR, previewC);
+            
+            updatePreviewClears(previewR, previewC, draggingShape.data);
+            drawBoard();
+        }
+    };
+
+    const moveDrag = (e) => {
+        if (!draggingShape) return;
+        e.preventDefault();
+        const pos = getPointerPos(e);
+        moveShape(pos.x, pos.y);
+
+        const gridPos = calculateGridPosition(pos.x, pos.y);
+        if (gridPos.r !== previewR || gridPos.c !== previewC) {
+            previewR = gridPos.r;
+            previewC = gridPos.c;
+            isPreviewValid = canPlace(grid, draggingShape.data, previewR, previewC);
+            
+            updatePreviewClears(previewR, previewC, draggingShape.data);
+            drawBoard(); 
+        }
+    };
+
+    const endDrag = (e) => {
+        if (!draggingShape) return;
+        
+        const r = previewR;
+        const c = previewC;
+
+        if (r >= 0 && c >= 0 && isPreviewValid) {
+            // --- 修改：傳入顏色參數 ---
+            placeShape(draggingShape.data, r, c, draggingShape.color);
+            draggingShape.element.remove();
+            shapes = shapes.filter(s => s !== draggingShape);
+            
+            const hasLines = checkAndAnimateLines();
+            
+            if (!hasLines && shapes.length === 0) {
+                generateShapes();
+            }
+        } else {
+            resetShapeStyle(draggingShape);
+        }
+
+        draggingShape = null;
+        previewR = -1;
+        previewC = -1;
+        isPreviewValid = false;
+        
+        previewClearRows = [];
+        previewClearCols = [];
+        
+        if (!isAnimating) {
+            drawBoard();
+        }
+    };
+
+    document.addEventListener('mousedown', startDrag);
+    document.addEventListener('touchstart', startDrag, { passive: false });
+    document.addEventListener('mousemove', moveDrag);
+    document.addEventListener('touchmove', moveDrag, { passive: false });
+    document.addEventListener('mouseup', endDrag);
+    document.addEventListener('touchend', endDrag);
 }
 
 function generateShapes() {
@@ -111,7 +276,7 @@ function generateShapes() {
 
     let safeBatch = null;
 
-    for (let attempt = 0; attempt < 10; attempt++) {
+    for (let attempt = 0; attempt < 15; attempt++) {
         let candidates = [];
         for(let i=0; i<3; i++) {
             candidates.push(ALL_SHAPES[Math.floor(Math.random() * ALL_SHAPES.length)]);
@@ -124,7 +289,7 @@ function generateShapes() {
     }
 
     if (!safeBatch) {
-        const smallShapes = ALL_SHAPES.filter(s => getShapeSize(s) <= 2);
+        const smallShapes = ALL_SHAPES.filter(s => getShapeSize(s) <= 3);
         for (let attempt = 0; attempt < 10; attempt++) {
             let candidates = [];
             for(let i=0; i<3; i++) {
@@ -145,8 +310,14 @@ function generateShapes() {
         }
     }
 
+    // --- 新增：隨機挑選 3 種不重複的顏色 ---
+    let availableColors = [...COLORS];
+    availableColors.sort(() => 0.5 - Math.random()); // 洗牌
+    let chosenColors = [availableColors[0], availableColors[1], availableColors[2]];
+
     for (let i = 0; i < 3; i++) {
         const template = safeBatch[i];
+        const shapeColor = chosenColors[i]; // 取出專屬顏色
         
         const slot = document.createElement('div');
         slot.className = 'shape-slot';
@@ -158,11 +329,17 @@ function generateShapes() {
         shapeCanvas.width = cols * TILE_SIZE;
         shapeCanvas.height = rows * TILE_SIZE;
         shapeCanvas.className = 'shape-preview';
-        shapeCanvas.style.width = (cols * PREVIEW_TILE_SIZE) + 'px';
-        shapeCanvas.style.height = (rows * PREVIEW_TILE_SIZE) + 'px';
+        
+        let previewScale = PREVIEW_TILE_SIZE;
+        if (cols > 3 || rows > 3) {
+            previewScale = 18; 
+        }
+        
+        shapeCanvas.style.width = (cols * previewScale) + 'px';
+        shapeCanvas.style.height = (rows * previewScale) + 'px';
         
         const sCtx = shapeCanvas.getContext('2d');
-        sCtx.fillStyle = BLOCK_COLOR;
+        sCtx.fillStyle = shapeColor; // 繪製專屬顏色
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
                 if (template[r][c] === 1) {
@@ -176,7 +353,9 @@ function generateShapes() {
             data: template,
             element: shapeCanvas,
             rows: rows,
-            cols: cols
+            cols: cols,
+            previewScale: previewScale,
+            color: shapeColor // 將顏色存入物件中
         };
 
         slot.appendChild(shapeCanvas);
@@ -198,7 +377,7 @@ function getShapeSize(matrix) {
 function isBatchAbsolutelySafe(currentGrid, batchShapes) {
     let emptyCount = 0;
     for(let r=0; r<GRID_SIZE; r++) for(let c=0; c<GRID_SIZE; c++) if(currentGrid[r][c]===0) emptyCount++;
-    if(emptyCount > 50) return true; 
+    if(emptyCount > 55) return true; 
 
     const gridClone = currentGrid.map(row => [...row]);
     return canSurviveAllPaths(gridClone, batchShapes);
@@ -209,7 +388,7 @@ function canSurviveAllPaths(simGrid, remainingShapes) {
 
     for (let shape of remainingShapes) {
         const moves = getAllValidMoves(simGrid, shape);
-        if (moves.length === 0) return false; 
+        if (moves.length === 0) return false;
     }
 
     for (let i = 0; i < remainingShapes.length; i++) {
@@ -217,27 +396,25 @@ function canSurviveAllPaths(simGrid, remainingShapes) {
         const otherShapes = remainingShapes.filter((_, index) => index !== i);
         
         const possibleMoves = getAllValidMoves(simGrid, shapeToCheck);
-        
         if (possibleMoves.length === 0) return false;
 
         let movesToCheck = possibleMoves;
-        if (movesToCheck.length > 15) {
-            movesToCheck = movesToCheck.sort(() => 0.5 - Math.random()).slice(0, 15);
+        if (movesToCheck.length > 12) {
+            movesToCheck = movesToCheck.sort(() => 0.5 - Math.random()).slice(0, 12);
         }
 
         for (let move of movesToCheck) {
             const nextGrid = applyMoveClone(simGrid, shapeToCheck, move.r, move.c);
             handleLineClearSim(nextGrid);
-
+            
             if (otherShapes.length > 0) {
                 if (!canSurviveAllPaths(nextGrid, otherShapes)) {
-                    return false; 
+                    return false;
                 }
             }
         }
     }
-
-    return true; 
+    return true;
 }
 
 function getAllValidMoves(g, shapeMatrix) {
@@ -257,7 +434,7 @@ function applyMoveClone(g, shapeMatrix, r, c) {
     for (let i = 0; i < shapeMatrix.length; i++) {
         for (let j = 0; j < shapeMatrix[0].length; j++) {
             if (shapeMatrix[i][j] === 1) {
-                newG[r + i][c + j] = 1;
+                newG[r + i][c + j] = 1; 
             }
         }
     }
@@ -268,8 +445,9 @@ function handleLineClearSim(g) {
     let rowsToClear = [];
     let colsToClear = [];
 
+    // --- 修改：連線判斷從 === 1 改為 !== 0 ---
     for (let r = 0; r < GRID_SIZE; r++) {
-        if (g[r].every(val => val === 1)) rowsToClear.push(r);
+        if (g[r].every(val => val !== 0)) rowsToClear.push(r);
     }
     for (let c = 0; c < GRID_SIZE; c++) {
         let full = true;
@@ -289,90 +467,21 @@ function canPlace(currentGrid, matrix, r, c) {
     if (matrix === undefined) { 
         return false;
     }
-    
     let g = currentGrid;
     let m = matrix;
-    let rr = r;
-    let cc = c;
-
-    if (rr + m.length > GRID_SIZE) return false;
-    if (cc + m[0].length > GRID_SIZE) return false;
+    
+    if (r + m.length > GRID_SIZE) return false;
+    if (c + m[0].length > GRID_SIZE) return false;
 
     for (let i = 0; i < m.length; i++) {
         for (let j = 0; j < m[0].length; j++) {
             if (m[i][j] === 1) {
-                if (g[rr + i][cc + j] === 1) return false;
+                // --- 修改：是否為空從 === 1 改為 !== 0 ---
+                if (g[r + i][c + j] !== 0) return false;
             }
         }
     }
     return true;
-}
-
-function bindInputEvents() {
-    const startDrag = (e) => {
-        if (isAnimating) return; 
-
-        const pos = getPointerPos(e);
-        const target = document.elementFromPoint(pos.x, pos.y);
-        const shape = shapes.find(s => s.element === target);
-
-        if (shape) {
-            e.preventDefault();
-            draggingShape = shape;
-            shape.element.classList.remove('shape-preview');
-            shape.element.classList.add('shape-dragging');
-            shape.element.style.width = (shape.cols * TILE_SIZE) + 'px';
-            shape.element.style.height = (shape.rows * TILE_SIZE) + 'px';
-            dragOffsetX = shape.element.width / 2;
-            dragOffsetY = shape.element.height / 2;
-            moveShape(pos.x, pos.y);
-        }
-    };
-
-    const moveDrag = (e) => {
-        if (!draggingShape) return;
-        e.preventDefault();
-        const pos = getPointerPos(e);
-        moveShape(pos.x, pos.y);
-    };
-
-    const endDrag = (e) => {
-        if (!draggingShape) return;
-
-        const boardRect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / boardRect.width;
-        const scaleY = canvas.height / boardRect.height;
-        const shapeRect = draggingShape.element.getBoundingClientRect();
-
-        const relativeX = (shapeRect.left - boardRect.left) * scaleX;
-        const relativeY = (shapeRect.top - boardRect.top) * scaleY;
-
-        const c = Math.round(relativeX / TILE_SIZE);
-        const r = Math.round(relativeY / TILE_SIZE);
-
-        if (r >= 0 && c >= 0 && canPlace(grid, draggingShape.data, r, c)) {
-            placeShape(draggingShape.data, r, c);
-            draggingShape.element.remove();
-            shapes = shapes.filter(s => s !== draggingShape);
-            
-            const hasLines = checkAndAnimateLines();
-            
-            if (!hasLines && shapes.length === 0) {
-                generateShapes();
-            }
-        } else {
-            resetShapeStyle(draggingShape);
-        }
-
-        draggingShape = null;
-    };
-
-    document.addEventListener('mousedown', startDrag);
-    document.addEventListener('touchstart', startDrag, { passive: false });
-    document.addEventListener('mousemove', moveDrag);
-    document.addEventListener('touchmove', moveDrag, { passive: false });
-    document.addEventListener('mouseup', endDrag);
-    document.addEventListener('touchend', endDrag);
 }
 
 function resetShapeStyle(shape) {
@@ -381,8 +490,8 @@ function resetShapeStyle(shape) {
     shape.element.style.position = '';
     shape.element.style.left = '';
     shape.element.style.top = '';
-    shape.element.style.width = (shape.cols * PREVIEW_TILE_SIZE) + 'px';
-    shape.element.style.height = (shape.rows * PREVIEW_TILE_SIZE) + 'px';
+    shape.element.style.width = (shape.cols * (shape.previewScale || PREVIEW_TILE_SIZE)) + 'px';
+    shape.element.style.height = (shape.rows * (shape.previewScale || PREVIEW_TILE_SIZE)) + 'px';
 }
 
 function getPointerPos(e) {
@@ -395,11 +504,12 @@ function moveShape(x, y) {
     draggingShape.element.style.top = (y - dragOffsetY) + 'px';
 }
 
-function placeShape(matrix, r, c) {
+// --- 修改：新增 color 參數儲存色彩 ---
+function placeShape(matrix, r, c, color) {
     for (let i = 0; i < matrix.length; i++) {
         for (let j = 0; j < matrix[0].length; j++) {
             if (matrix[i][j] === 1) {
-                grid[r + i][c + j] = 1;
+                grid[r + i][c + j] = color;
             }
         }
     }
@@ -415,8 +525,9 @@ function checkAndAnimateLines() {
     let linesToClearRows = [];
     let linesToClearCols = [];
 
+    // --- 修改：連線判斷從 === 1 改為 !== 0 ---
     for (let r = 0; r < GRID_SIZE; r++) {
-        if (grid[r].every(val => val === 1)) linesToClearRows.push(r);
+        if (grid[r].every(val => val !== 0)) linesToClearRows.push(r);
     }
     for (let c = 0; c < GRID_SIZE; c++) {
         let full = true;
