@@ -1,5 +1,3 @@
-// --- script.js (V30: 多階圖檔進化 + 預載入 + 暴力驗證版) ---
-
 const GRID_SIZE = 8;
 const TILE_SIZE = 40;  
 const PREVIEW_TILE_SIZE = 24; 
@@ -11,18 +9,14 @@ let isLightTheme = false;
 
 const FINGER_OFFSET = 80; 
 
-// --- 圖案設定與預載入 ---
 const PATTERN_PROBABILITY = 0.2; 
 
-// 1階圖案 (網格上生成的預設圖案)
 const specialImg = new Image();
 specialImg.src = 'icon.png'; 
 
-// 2階圖案 (預先載入，避免合成瞬間破圖)
 const specialImg2 = new Image();
 specialImg2.src = 'icon2.png';
 
-// 3階圖案 (預先載入)
 const specialImg3 = new Image();
 specialImg3.src = 'icon3.png';
 
@@ -799,7 +793,6 @@ function finalizeClear(rows, cols) {
     }
 }
 
-// --- 更新：依據階級設定不同的圖檔來源 ---
 function createStickerNode(tier) {
     const img = document.createElement('img');
     
@@ -808,7 +801,6 @@ function createStickerNode(tier) {
     } else if (tier === 2) {
         img.src = 'icon2.png';
     } else {
-        // 3 階 (包含以上) 都預設使用 icon3.png
         img.src = 'icon3.png';
     }
 
@@ -816,17 +808,14 @@ function createStickerNode(tier) {
     img.dataset.rot = "0";
     img.dataset.tier = tier;
 
-    // 每升一階，尺寸加大 15px
-    const size = TILE_SIZE + (tier - 1) * 15;
+    const size = TILE_SIZE + (tier - 1) * 30;
     img.style.width = size + 'px';
     img.style.height = size + 'px';
 
-    // 如果達到 4 階或以上，我們依然提供無上限的色相變化機制，讓神級玩家有額外驚喜
     if (tier > 3) {
         const hueShift = (tier - 3) * 70; 
         img.style.setProperty('--hue', hueShift + 'deg');
     } else {
-        // 確保 1、2、3 階使用原圖顏色，沒有色偏
         img.style.setProperty('--hue', '0deg');
     }
 
