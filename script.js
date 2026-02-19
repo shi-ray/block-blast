@@ -1,4 +1,4 @@
-// --- script.js (V19: 手指防遮擋 + 全區域感應 + 顏色 + 預覽白框 + 暴力驗證版) ---
+// --- script.js (V22: PNG滿版 + 圖案計分 + 首抽必中 + 暴力驗證版) ---
 
 // --- 1. 參數設定 ---
 const GRID_SIZE = 8;
@@ -8,22 +8,25 @@ const GAP = 2;
 const BOARD_COLOR = '#34495e'; 
 const EMPTY_COLOR = '#2c3e50'; 
 
-// --- 新增：手指向上偏移量 (預設 60px，大約是 1.5 個格子) ---
-const FINGER_OFFSET = 60; 
+const FINGER_OFFSET = 80; 
+
+// --- 圖案設定 ---
+const PATTERN_PROBABILITY = 0.15; 
+const specialImg = new Image();
+// --- 修改：換回 PNG ---
+specialImg.src = 'icon.png'; 
 
 const COLORS = [
-    '#e74c3c', 
-    '#e67e22', 
-    '#2ecc71', 
-    '#3498db', 
-    '#9b59b6'  
+    '#e74c3c', '#e67e22', '#2ecc71', '#3498db', '#9b59b6'  
 ];
 
 // --- 2. 遊戲狀態 ---
 let grid = []; 
+let specialGrid = []; 
 let shapes = []; 
 let score = 0;
 let isAnimating = false; 
+let firstGenerationMode = true;
 
 let draggingShape = null; 
 let dragOffsetX = 0;
@@ -80,8 +83,10 @@ const restartBtn = document.getElementById('restart-btn');
 
 function initGame() {
     grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
+    specialGrid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
     score = 0;
     isAnimating = false;
+    firstGenerationMode = true;
     updateScore(0);
     gameOverModal.classList.add('hidden');
     generateShapes(); 
@@ -133,8 +138,8 @@ function drawBoard() {
         for (let c = 0; c < GRID_SIZE; c++) {
             let cellValue = grid[r][c];
             let isToBeCleared = cellValue !== 0 && (previewClearRows.includes(r) || previewClearCols.includes(c));
-            
-            drawCell(r, c, cellValue !== 0 ? cellValue : EMPTY_COLOR, isToBeCleared ? '#ffffff' : null);
+            let drawImg = specialGrid[r][c] === 1;
+            drawCell(r, c, cellValue !== 0 ? cellValue : EMPTY_COLOR, isToBeCleared ? '#ffffff' : null, drawImg);
         }
     }
 
@@ -144,7 +149,8 @@ function drawBoard() {
         for (let i = 0; i < matrix.length; i++) {
             for (let j = 0; j < matrix[0].length; j++) {
                 if (matrix[i][j] === 1) {
-                    drawCell(previewR + i, previewC + j, draggingShape.color);
+                    let drawImg = draggingShape.specialCell && draggingShape.specialCell.r === i && draggingShape.specialCell.c === j;
+                    drawCell(previewR + i, previewC + j, draggingShape.color, null, drawImg);
                 }
             }
         }
@@ -152,12 +158,17 @@ function drawBoard() {
     }
 }
 
-function drawCell(r, c, color, borderColor = null) {
+function drawCell(r, c, color, borderColor = null, drawImg = false) {
     let x = c * TILE_SIZE + GAP;
     let y = r * TILE_SIZE + GAP;
     let size = TILE_SIZE - GAP * 2;
     ctx.fillStyle = color;
     ctx.fillRect(x, y, size, size);
+
+    // --- 修改：移除 pad，讓圖片滿版繪製 ---
+    if (drawImg && specialImg.complete && specialImg.naturalWidth !== 0) {
+        ctx.drawImage(specialImg, x, y, size, size);
+    }
 
     if (borderColor) {
         ctx.strokeStyle = borderColor;
@@ -196,7 +207,6 @@ function bindInputEvents() {
             shape.element.style.width = (shape.cols * TILE_SIZE) + 'px';
             shape.element.style.height = (shape.rows * TILE_SIZE) + 'px';
             
-            // --- 修改核心：加入 FINGER_OFFSET 讓方塊向上錯位 ---
             dragOffsetX = shape.element.width / 2;
             dragOffsetY = (shape.element.height / 2) + FINGER_OFFSET;
             moveShape(pos.x, pos.y);
@@ -235,7 +245,7 @@ function bindInputEvents() {
         const c = previewC;
 
         if (r >= 0 && c >= 0 && isPreviewValid) {
-            placeShape(draggingShape.data, r, c, draggingShape.color);
+            placeShape(draggingShape, r, c);
             draggingShape.element.remove();
             shapes = shapes.filter(s => s !== draggingShape);
             
@@ -313,10 +323,37 @@ function generateShapes() {
     availableColors.sort(() => 0.5 - Math.random()); 
     let chosenColors = [availableColors[0], availableColors[1], availableColors[2]];
 
+    let guaranteedIconIndex = -1;
+    if (firstGenerationMode) {
+        guaranteedIconIndex = Math.floor(Math.random() * 3);
+        firstGenerationMode = false;
+    }
+
     for (let i = 0; i < 3; i++) {
         const template = safeBatch[i];
         const shapeColor = chosenColors[i]; 
         
+        let specialCell = null;
+        let shouldHaveIcon = false;
+
+        if (guaranteedIconIndex !== -1) {
+            shouldHaveIcon = (i === guaranteedIconIndex);
+        } else {
+            shouldHaveIcon = (Math.random() < PATTERN_PROBABILITY);
+        }
+
+        if (shouldHaveIcon) {
+            let ones = [];
+            for(let r=0; r<template.length; r++) {
+                for(let c=0; c<template[0].length; c++) {
+                    if(template[r][c] === 1) ones.push({r, c});
+                }
+            }
+            if(ones.length > 0) {
+                specialCell = ones[Math.floor(Math.random() * ones.length)];
+            }
+        }
+
         const slot = document.createElement('div');
         slot.className = 'shape-slot';
 
@@ -341,7 +378,21 @@ function generateShapes() {
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
                 if (template[r][c] === 1) {
-                    sCtx.fillRect(c * TILE_SIZE + GAP, r * TILE_SIZE + GAP, TILE_SIZE - GAP*2, TILE_SIZE - GAP*2);
+                    let cellX = c * TILE_SIZE + GAP;
+                    let cellY = r * TILE_SIZE + GAP;
+                    let cellSize = TILE_SIZE - GAP*2;
+                    sCtx.fillRect(cellX, cellY, cellSize, cellSize);
+                    
+                    if (specialCell && specialCell.r === r && specialCell.c === c) {
+                        // --- 修改：移除預覽圖的 pad，讓圖片滿版繪製 ---
+                        if (specialImg.complete && specialImg.naturalWidth !== 0) {
+                            sCtx.drawImage(specialImg, cellX, cellY, cellSize, cellSize);
+                        } else {
+                            specialImg.onload = () => {
+                                sCtx.drawImage(specialImg, cellX, cellY, cellSize, cellSize);
+                            };
+                        }
+                    }
                 }
             }
         }
@@ -354,7 +405,8 @@ function generateShapes() {
             rows: rows,
             cols: cols,
             previewScale: previewScale,
-            color: shapeColor 
+            color: shapeColor,
+            specialCell: specialCell 
         };
 
         slot.appendChild(shapeCanvas);
@@ -501,11 +553,15 @@ function moveShape(x, y) {
     draggingShape.element.style.top = (y - dragOffsetY) + 'px';
 }
 
-function placeShape(matrix, r, c, color) {
+function placeShape(shapeObj, r, c) {
+    const matrix = shapeObj.data;
     for (let i = 0; i < matrix.length; i++) {
         for (let j = 0; j < matrix[0].length; j++) {
             if (matrix[i][j] === 1) {
-                grid[r + i][c + j] = color;
+                grid[r + i][c + j] = shapeObj.color;
+                if (shapeObj.specialCell && shapeObj.specialCell.r === i && shapeObj.specialCell.c === j) {
+                    specialGrid[r + i][c + j] = 1;
+                }
             }
         }
     }
@@ -573,16 +629,45 @@ function runClearAnimation(rows, cols) {
 }
 
 function finalizeClear(rows, cols) {
-    rows.forEach(r => grid[r].fill(0));
+    // --- 修改：利用 Set 來蒐集準備被清除的座標，避免交叉點重複計算 ---
+    let cellsToClear = new Set();
+    
+    rows.forEach(r => {
+        for (let c = 0; c < GRID_SIZE; c++) {
+            cellsToClear.add(`${r},${c}`);
+        }
+    });
+    
     cols.forEach(c => {
-        for(let r=0; r<GRID_SIZE; r++) grid[r][c] = 0;
+        for (let r = 0; r < GRID_SIZE; r++) {
+            cellsToClear.add(`${r},${c}`);
+        }
     });
 
-    const totalLines = rows.length + cols.length;
-    if (totalLines > 0) {
-        score += 10 * Math.pow(totalLines, 2);
+    let iconsCleared = 0;
+    
+    // --- 修改：進行圖案結算並清除陣列資料 ---
+    cellsToClear.forEach(coord => {
+        let parts = coord.split(',');
+        let r = parseInt(parts[0]);
+        let c = parseInt(parts[1]);
+        
+        // 檢查該座標有沒有圖案
+        if (specialGrid[r][c] === 1) {
+            iconsCleared++;
+        }
+        
+        // 清除網格資料
+        grid[r][c] = 0;
+        specialGrid[r][c] = 0;
+    });
+
+    // --- 修改：計分邏輯更新，每個圖案一分 ---
+    if (iconsCleared > 0) {
+        score += iconsCleared;
+        updateScore(score);
     }
-    updateScore(score);
+    
     isAnimating = false; 
     drawBoard(); 
 
