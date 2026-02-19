@@ -1,4 +1,4 @@
-// --- script.js (V24: 貼紙雙點旋轉 + 收集系統 + 暴力驗證版) ---
+// --- script.js (V25: 標題雙點隱藏貼紙 + 暴力驗證版) ---
 
 const GRID_SIZE = 8;
 const TILE_SIZE = 40;  
@@ -93,8 +93,10 @@ function initGame() {
     generateShapes(); 
     drawBoard();
     
+    // 綁定遊戲輸入與標題雙擊事件 (只綁定一次)
     if (!window.gameInitialized) {
         bindInputEvents();
+        bindTitleDoubleClick(); // --- 新增：呼叫標題雙點事件綁定 ---
         window.gameInitialized = true;
     }
 }
@@ -102,6 +104,38 @@ function initGame() {
 restartBtn.addEventListener('click', () => {
     initGame();
 });
+
+// --- 新增：標題雙點擊邏輯 ---
+function bindTitleDoubleClick() {
+    const titleElement = document.querySelector('.header h1');
+    if (!titleElement) return;
+
+    let lastTapTime = 0;
+
+    const handleTitleTap = (e) => {
+        const currentTime = new Date().getTime();
+        const tapLength = currentTime - lastTapTime;
+        
+        // 雙擊判定 (時間差小於 300 毫秒)
+        if (tapLength > 0 && tapLength < 300) {
+            // 切換 body 的 class
+            document.body.classList.toggle('hide-stickers');
+            
+            // 雙擊後重置計時器
+            lastTapTime = 0;
+            
+            // 清除可能因為雙擊產生的文字反白 (防呆)
+            if (window.getSelection) {
+                window.getSelection().removeAllRanges();
+            }
+        } else {
+            lastTapTime = currentTime;
+        }
+    };
+
+    titleElement.addEventListener('mousedown', handleTitleTap);
+    titleElement.addEventListener('touchstart', handleTitleTap, { passive: true });
+}
 
 function updatePreviewClears(r, c, matrix) {
     previewClearRows = [];
@@ -713,27 +747,23 @@ function spawnSticker() {
     makeStickerDraggable(img);
 }
 
-// --- 更新：加入雙點/雙擊旋轉邏輯 ---
 function makeStickerDraggable(el) {
     let startX, startY, initialLeft, initialTop;
-    let currentRotation = 0; // 記錄目前的旋轉角度
-    let lastTapTime = 0;     // 記錄上一次點擊的時間，用來判定雙擊
+    let currentRotation = 0; 
+    let lastTapTime = 0;     
 
     const startDrag = (e) => {
         e.preventDefault(); 
         e.stopPropagation(); 
         
-        // 雙擊判定邏輯 (測量兩次點擊之間的時間差)
         const currentTime = new Date().getTime();
         const tapLength = currentTime - lastTapTime;
         
         if (tapLength > 0 && tapLength < 300) {
-            // 在 300 毫秒內連續點擊兩次，觸發旋轉！
             currentRotation += 45;
-            // 透過寫入 CSS 變數，通知 CSS 進行動畫旋轉
             el.style.setProperty('--rot', currentRotation + 'deg');
-            lastTapTime = 0; // 重置計時器，避免三連擊觸發兩次
-            return; // 雙擊時不進入拖曳模式
+            lastTapTime = 0; 
+            return; 
         }
         lastTapTime = currentTime;
 

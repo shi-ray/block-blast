@@ -152,10 +152,20 @@ canvas {
     user-select: none;
     filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));
     transform: rotate(var(--rot, 0deg));
-    transition: transform 0.1s;
+    transition: transform 0.1s, opacity 0.2s ease-in-out;
 }
 
 .sticker:active {
     cursor: grabbing;
     transform: scale(1.1) rotate(var(--rot, 0deg));
+}
+
+.header h1 {
+    user-select: none;
+    cursor: pointer; 
+}
+
+body.hide-stickers .sticker {
+    opacity: 0;
+    pointer-events: none; 
 }
