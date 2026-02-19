@@ -1,4 +1,4 @@
-// --- script.js (V26: 分數雙點洗牌 + 標題淨空 + 貼紙收集系統版) ---
+// --- script.js (V27: 手機流暢拖曳 + 消除藍色罩子版) ---
 
 const GRID_SIZE = 8;
 const TILE_SIZE = 40;  
@@ -96,7 +96,7 @@ function initGame() {
     if (!window.gameInitialized) {
         bindInputEvents();
         bindTitleDoubleClick(); 
-        bindScoreDoubleClick(); // --- 新增：綁定分數雙點洗牌事件 ---
+        bindScoreDoubleClick(); 
         window.gameInitialized = true;
     }
 }
@@ -105,7 +105,6 @@ restartBtn.addEventListener('click', () => {
     initGame();
 });
 
-// --- 標題雙擊：淨空模式 ---
 function bindTitleDoubleClick() {
     const titleElement = document.querySelector('.header h1');
     if (!titleElement) return;
@@ -125,7 +124,6 @@ function bindTitleDoubleClick() {
     titleElement.addEventListener('touchstart', handleTitleTap, { passive: true });
 }
 
-// --- 新增：分數雙擊：洗牌模式 ---
 function bindScoreDoubleClick() {
     if (!scoreElement) return;
     let lastTapTime = 0;
@@ -134,12 +132,19 @@ function bindScoreDoubleClick() {
         const tapLength = currentTime - lastTapTime;
         if (tapLength > 0 && tapLength < 300) {
             
-            // 取得畫面上所有的貼紙，重新賦予隨機座標
             const stickers = document.querySelectorAll('.sticker');
             stickers.forEach(el => {
+                // 【核心修改】先加上 shuffling 類別，讓 CSS 產生飛行過渡動畫
+                el.classList.add('shuffling');
+                
                 const pos = getRandomValidPosition(TILE_SIZE);
                 el.style.left = pos.x + 'px';
                 el.style.top = pos.y + 'px';
+                
+                // 【核心修改】500 毫秒 (動畫結束後) 拔掉 shuffling 類別，這樣手指拖曳才不會延遲
+                setTimeout(() => {
+                    el.classList.remove('shuffling');
+                }, 500);
             });
 
             lastTapTime = 0;
@@ -152,7 +157,6 @@ function bindScoreDoubleClick() {
     scoreElement.addEventListener('touchstart', handleScoreTap, { passive: true });
 }
 
-// --- 新增：獨立抽出的隨機座標生成器 (DRY 原則) ---
 function getRandomValidPosition(size) {
     const gameContainer = document.getElementById('game-container');
     const rect = gameContainer.getBoundingClientRect();
@@ -166,7 +170,6 @@ function getRandomValidPosition(size) {
         x = padding + Math.random() * (window.innerWidth - size - padding * 2);
         y = padding + Math.random() * (window.innerHeight - size - padding * 2);
 
-        // AABB 碰撞偵測，避開主遊戲區
         if (x < rect.right && x + size > rect.left &&
             y < rect.bottom && y + size > rect.top) {
             overlap = true;
@@ -177,7 +180,6 @@ function getRandomValidPosition(size) {
     }
     return { x, y };
 }
-
 
 function updatePreviewClears(r, c, matrix) {
     previewClearRows = [];
@@ -750,7 +752,6 @@ function finalizeClear(rows, cols) {
     }
 }
 
-// --- 修改：使用獨立的座標生成函數 ---
 function spawnSticker() {
     const img = document.createElement('img');
     img.src = specialImg.src;
