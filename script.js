@@ -1,3 +1,5 @@
+// --- script.js (V31: 多階圖檔進化 + 動態機率 + 1.5倍尺寸 + 3階限制) ---
+
 const GRID_SIZE = 8;
 const TILE_SIZE = 40;  
 const PREVIEW_TILE_SIZE = 24; 
@@ -9,17 +11,17 @@ let isLightTheme = false;
 
 const FINGER_OFFSET = 80; 
 
-const PATTERN_PROBABILITY = 0.2; 
-
+// 1階圖案 (網格上生成的預設圖案)
 const specialImg = new Image();
 specialImg.src = 'icon.png'; 
 
+// 2階圖案 (預先載入，避免合成瞬間破圖)
 const specialImg2 = new Image();
 specialImg2.src = 'icon2.png';
 
+// 3階圖案 (預先載入)
 const specialImg3 = new Image();
 specialImg3.src = 'icon3.png';
-
 
 const COLORS = [
     '#e74c3c', '#e67e22', '#2ecc71', '#3498db', '#9b59b6'  
@@ -86,6 +88,12 @@ const scoreElement = document.getElementById('score');
 const gameOverModal = document.getElementById('game-over-modal');
 const finalScoreElement = document.getElementById('final-score');
 const restartBtn = document.getElementById('restart-btn');
+
+// --- 機率計算邏輯 ---
+function getPatternProbability() {
+    let prob = 0.2 + (Math.floor(score / 2) * 0.01);
+    return Math.min(prob, 0.8);
+}
 
 function initGame() {
     grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
@@ -458,7 +466,8 @@ function generateShapes() {
         if (guaranteedIconIndex !== -1) {
             shouldHaveIcon = (i === guaranteedIconIndex);
         } else {
-            shouldHaveIcon = (Math.random() < PATTERN_PROBABILITY);
+            // 使用動態計算的機率
+            shouldHaveIcon = (Math.random() < getPatternProbability());
         }
 
         if (shouldHaveIcon) {
@@ -777,10 +786,13 @@ function finalizeClear(rows, cols) {
     });
 
     if (iconsCleared > 0) {
+        // 獲得 n 分
         score += iconsCleared;
         updateScore(score);
         
-        for (let i = 0; i < iconsCleared; i++) {
+        // 獲得 n^2 個貼紙
+        const stickersToSpawn = iconsCleared * iconsCleared;
+        for (let i = 0; i < stickersToSpawn; i++) {
             spawnSticker();
         }
     }
@@ -793,6 +805,7 @@ function finalizeClear(rows, cols) {
     }
 }
 
+// --- 更新：根據階級設定圖檔與 1.5 倍尺寸 ---
 function createStickerNode(tier) {
     const img = document.createElement('img');
     
@@ -801,6 +814,7 @@ function createStickerNode(tier) {
     } else if (tier === 2) {
         img.src = 'icon2.png';
     } else {
+        // 第三階固定使用 icon3.png
         img.src = 'icon3.png';
     }
 
@@ -808,16 +822,12 @@ function createStickerNode(tier) {
     img.dataset.rot = "0";
     img.dataset.tier = tier;
 
-    const size = TILE_SIZE + (tier - 1) * 30;
+    // 每一階寬高都是前一階的 1.5 倍 (基準 TILE_SIZE=40)
+    const size = TILE_SIZE * Math.pow(1.5, tier - 1);
     img.style.width = size + 'px';
     img.style.height = size + 'px';
 
-    if (tier > 3) {
-        const hueShift = (tier - 3) * 70; 
-        img.style.setProperty('--hue', hueShift + 'deg');
-    } else {
-        img.style.setProperty('--hue', '0deg');
-    }
+    img.style.setProperty('--hue', '0deg');
 
     setTimeout(() => img.classList.remove('evolve-anim'), 600);
     
@@ -852,8 +862,13 @@ function spawnMergedSticker(cx, cy, tier) {
     makeStickerDraggable(img);
 }
 
+// --- 更新：限制第三階無法合成 ---
 function checkMerge(droppedSticker) {
     const tier = parseInt(droppedSticker.dataset.tier || 1);
+    
+    // 限制：第三階無法合出第四階
+    if (tier >= 3) return;
+
     const rect1 = droppedSticker.getBoundingClientRect();
     const cx1 = rect1.left + rect1.width / 2;
     const cy1 = rect1.top + rect1.height / 2;
