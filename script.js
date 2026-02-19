@@ -1,4 +1,4 @@
-// --- script.js (V36: 加入通關時間顯示) ---
+// --- script.js (V37: 加入自動存檔與還原進度功能) ---
 
 const GRID_SIZE = 8;
 const TILE_SIZE = 40;  
@@ -33,7 +33,10 @@ let shapes = [];
 let score = 0;
 let isAnimating = false; 
 let firstGenerationMode = true;
-let gameStartTime = 0; // 新增：紀錄遊戲開始時間
+
+// 時間追蹤變數
+let gameStartTime = 0; 
+let accumulatedTime = 0; // 紀錄之前遊玩累積的毫秒數
 
 let highestZIndex = 100; 
 
@@ -90,6 +93,107 @@ const gameOverModal = document.getElementById('game-over-modal');
 const finalScoreElement = document.getElementById('final-score');
 const restartBtn = document.getElementById('restart-btn');
 
+// --- 存檔與讀檔系統 ---
+function saveGame() {
+    // 更新累加時間
+    accumulatedTime += (Date.now() - gameStartTime);
+    gameStartTime = Date.now();
+
+    const stickersData = Array.from(document.querySelectorAll('.sticker')).map(el => ({
+        tier: el.dataset.tier,
+        left: el.style.left,
+        top: el.style.top,
+        rot: el.dataset.rot || "0"
+    }));
+
+    const shapesData = shapes.map(s => ({
+        data: s.data,
+        color: s.color,
+        specialCell: s.specialCell,
+        previewScale: s.previewScale
+    }));
+
+    const gameState = {
+        grid: grid,
+        specialGrid: specialGrid,
+        score: score,
+        accumulatedTime: accumulatedTime,
+        shapes: shapesData,
+        stickers: stickersData,
+        firstGenerationMode: firstGenerationMode
+    };
+
+    try {
+        localStorage.setItem('pikaBlastSave', JSON.stringify(gameState));
+    } catch (e) {
+        console.warn("無法儲存遊戲進度", e);
+    }
+}
+
+function restoreShapes(savedShapes) {
+    shapeContainer.innerHTML = ''; 
+    shapes = [];
+
+    savedShapes.forEach((sData, i) => {
+        const template = sData.data;
+        const shapeColor = sData.color;
+        const specialCell = sData.specialCell;
+        const previewScale = sData.previewScale;
+
+        const slot = document.createElement('div');
+        slot.className = 'shape-slot';
+
+        const shapeCanvas = document.createElement('canvas');
+        const rows = template.length;
+        const cols = template[0].length;
+        
+        shapeCanvas.width = cols * TILE_SIZE;
+        shapeCanvas.height = rows * TILE_SIZE;
+        shapeCanvas.className = 'shape-preview';
+        shapeCanvas.style.width = (cols * previewScale) + 'px';
+        shapeCanvas.style.height = (rows * previewScale) + 'px';
+        
+        const sCtx = shapeCanvas.getContext('2d');
+        sCtx.fillStyle = shapeColor; 
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                if (template[r][c] === 1) {
+                    let cellX = c * TILE_SIZE + GAP;
+                    let cellY = r * TILE_SIZE + GAP;
+                    let cellSize = TILE_SIZE - GAP*2;
+                    sCtx.fillRect(cellX, cellY, cellSize, cellSize);
+                    
+                    if (specialCell && specialCell.r === r && specialCell.c === c) {
+                        if (specialImg.complete && specialImg.naturalWidth !== 0) {
+                            sCtx.drawImage(specialImg, cellX, cellY, cellSize, cellSize);
+                        } else {
+                            specialImg.onload = () => {
+                                sCtx.drawImage(specialImg, cellX, cellY, cellSize, cellSize);
+                            };
+                        }
+                    }
+                }
+            }
+        }
+
+        const shapeObj = {
+            id: Date.now() + i,
+            data: template,
+            element: shapeCanvas,
+            slot: slot, 
+            rows: rows,
+            cols: cols,
+            previewScale: previewScale,
+            color: shapeColor,
+            specialCell: specialCell 
+        };
+
+        slot.appendChild(shapeCanvas);
+        shapeContainer.appendChild(slot);
+        shapes.push(shapeObj);
+    });
+}
+
 // --- 動態生成破關與彩蛋畫面 ---
 function setupGameClearModal() {
     if (document.getElementById('game-clear-modal')) return;
@@ -118,10 +222,10 @@ function renderMainView() {
     const content = document.getElementById('game-clear-content');
     if (!content) return;
 
-    // 計算通關時間
-    const timeElapsed = Math.floor((Date.now() - gameStartTime) / 1000);
-    const minutes = Math.floor(timeElapsed / 60);
-    const seconds = timeElapsed % 60;
+    const currentTimeElapsed = accumulatedTime + (Date.now() - gameStartTime);
+    const totalSeconds = Math.floor(currentTimeElapsed / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
     const timeString = minutes > 0 ? `${minutes}分${seconds}秒` : `${seconds}秒`;
 
     content.innerHTML = `
@@ -154,8 +258,8 @@ function renderYesView() {
     const content = document.getElementById('game-clear-content');
     content.innerHTML = `
         <h2 style="color: #f1c40f; margin: 0 0 15px 0; font-size: 2rem;">開玩笑的哈哈</h2>
-        <p style="font-size: 1.2rem; margin-bottom: 25px; line-height: 1.5;">該不會有人真信了吧，<br>總之恭喜您通關遊戲</p>
-        <button id="btn-creator" style="background-color: #f1c40f; color: #2c3e50; border: none; padding: 12px 24px; font-size: 1.1rem; border-radius: 50px; cursor: pointer; font-weight: bold; transition: transform 0.1s;">創作者：shiray</button>
+        <p style="font-size: 1.2rem; margin-bottom: 25px; line-height: 1.5;">該不會有人真信了吧🤔<br>總之恭喜您通關遊戲</p>
+        <button id="btn-creator" style="background-color: #f1c40f; color: #2c3e50; border: none; padding: 12px 24px; font-size: 1.1rem; border-radius: 50px; cursor: pointer; font-weight: bold; transition: transform 0.1s;">創作者：shiRay</button>
     `;
     document.getElementById('btn-creator').onclick = closeModal;
     addClickEffect('btn-creator');
@@ -175,17 +279,15 @@ function addClickEffect(id) {
 }
 
 function showGameClearScreen() {
-    renderMainView(); // 在顯示前先動態抓取最新時間渲染
+    renderMainView(); 
     document.getElementById('game-clear-modal').classList.remove('hidden');
 }
 
-// --- 機率計算 ---
 function getPatternProbability() {
     let prob = 0.2 + (Math.floor(score / 2) * 0.01);
     return Math.min(prob, 0.8);
 }
 
-// --- 開發者作弊指令 ---
 function bindCheatKeys() {
     document.addEventListener('keydown', (e) => {
         if (e.key === '*') {
@@ -194,21 +296,59 @@ function bindCheatKeys() {
     });
 }
 
-function initGame() {
-    grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
-    specialGrid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
-    score = 0;
-    isAnimating = false;
-    firstGenerationMode = true;
-    gameStartTime = Date.now(); // 遊戲重啟時重置時間
-
-    updateScore(0);
-    gameOverModal.classList.add('hidden');
-    
+function initGame(forceReset = false) {
     document.querySelectorAll('.sticker').forEach(el => el.remove());
+    gameOverModal.classList.add('hidden');
+    isAnimating = false;
     
+    let loaded = false;
+    
+    if (!forceReset) {
+        try {
+            const savedStr = localStorage.getItem('pikaBlastSave');
+            if (savedStr) {
+                const state = JSON.parse(savedStr);
+                grid = state.grid;
+                specialGrid = state.specialGrid;
+                score = state.score;
+                accumulatedTime = state.accumulatedTime || 0;
+                gameStartTime = Date.now();
+                firstGenerationMode = state.firstGenerationMode !== undefined ? state.firstGenerationMode : false;
+                
+                updateScore(score);
+                restoreShapes(state.shapes);
+                
+                state.stickers.forEach(st => {
+                    const { img } = createStickerNode(parseInt(st.tier));
+                    img.style.left = st.left;
+                    img.style.top = st.top;
+                    img.dataset.rot = st.rot;
+                    img.style.setProperty('--rot', st.rot + 'deg');
+                    highestZIndex++;
+                    img.style.zIndex = highestZIndex;
+                    document.body.appendChild(img);
+                    makeStickerDraggable(img);
+                });
+                
+                loaded = true;
+            }
+        } catch (e) {
+            console.warn("讀取存檔失敗", e);
+        }
+    }
+
+    if (!loaded) {
+        grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
+        specialGrid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
+        score = 0;
+        firstGenerationMode = true;
+        accumulatedTime = 0;
+        gameStartTime = Date.now();
+        updateScore(0);
+        generateShapes(); 
+    }
+
     setupGameClearModal(); 
-    generateShapes(); 
     drawBoard();
     
     if (!window.gameInitialized) {
@@ -221,7 +361,8 @@ function initGame() {
 }
 
 restartBtn.addEventListener('click', () => {
-    initGame();
+    localStorage.removeItem('pikaBlastSave'); // 重新開始時清除存檔
+    initGame(true);
 });
 
 function toggleTheme() {
@@ -287,6 +428,7 @@ function bindScoreTaps() {
                 el.style.top = pos.y + 'px';
                 setTimeout(() => el.classList.remove('shuffling'), 500);
             });
+            setTimeout(saveGame, 550); // 打亂後存檔
             lastTapTime = 0;
             if (window.getSelection) window.getSelection().removeAllRanges();
         } else {
@@ -301,6 +443,7 @@ function bindScoreTaps() {
                     el.style.setProperty('--rot', currentRot + 'deg');
                     setTimeout(() => el.classList.remove('spinning'), 800);
                 });
+                setTimeout(saveGame, 850); // 旋轉後存檔
                 lastTapTime = 0;
             }, 300);
         }
@@ -481,8 +624,12 @@ function bindInputEvents() {
             
             const hasLines = checkAndAnimateLines();
             
-            if (!hasLines && shapes.length === 0) {
-                generateShapes();
+            if (!hasLines) {
+                if (shapes.length === 0) {
+                    generateShapes();
+                } else {
+                    saveGame(); // 沒有消除也存檔
+                }
             }
         } else {
             resetShapeStyle(draggingShape);
@@ -546,6 +693,7 @@ function generateShapes() {
         if (!isBatchAbsolutelySafe(grid, safeBatch)) {
             finalScoreElement.innerText = score;
             gameOverModal.classList.remove('hidden'); 
+            localStorage.removeItem('pikaBlastSave'); // 遊戲結束時清除存檔
             return;
         }
     }
@@ -643,6 +791,8 @@ function generateShapes() {
         shapeContainer.appendChild(slot);
         shapes.push(shapeObj);
     }
+    
+    saveGame(); // 生成新方塊後存檔
 }
 
 function getShapeSize(matrix) {
@@ -898,6 +1048,8 @@ function finalizeClear(rows, cols) {
 
     if (shapes.length === 0) {
         generateShapes();
+    } else {
+        saveGame(); // 方塊沒清空也要存檔
     }
 }
 
@@ -963,7 +1115,10 @@ function spawnMergedSticker(cx, cy, tier) {
 function checkMerge(droppedSticker) {
     const tier = parseInt(droppedSticker.dataset.tier || 1);
     
-    if (tier >= 4) return;
+    if (tier >= 4) {
+        saveGame();
+        return;
+    }
 
     const rect1 = droppedSticker.getBoundingClientRect();
     const cx1 = rect1.left + rect1.width / 2;
@@ -1006,6 +1161,7 @@ function checkMerge(droppedSticker) {
             spawnMergedSticker(avgCx, avgCy, tier + 1);
         }
     }
+    saveGame(); // 合併判定結束後存檔
 }
 
 function makeStickerDraggable(el) {
@@ -1025,6 +1181,7 @@ function makeStickerDraggable(el) {
             el.dataset.rot = currentRotation;
             el.style.setProperty('--rot', currentRotation + 'deg');
             lastTapTime = 0; 
+            saveGame(); // 旋轉後存檔
             return; 
         }
         lastTapTime = currentTime;
