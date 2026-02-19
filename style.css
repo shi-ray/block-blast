@@ -175,3 +175,24 @@ body.hide-stickers .sticker {
     opacity: 0;
     pointer-events: none; 
 }
+
+body {
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+body.light-theme {
+    background-color: #f5f6fa; 
+    color: #2c3e50; 
+}
+
+body.light-theme #score {
+    color: #2c3e50;
+}
+
+body.light-theme #gameCanvas {
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.sticker.spinning {
+    transition: transform 0.8s cubic-bezier(0.25, 0.1, 0.25, 1), opacity 0.2s ease-in-out, left 0.5s ease, top 0.5s ease;
+}

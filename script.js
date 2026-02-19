@@ -1,11 +1,14 @@
-// --- script.js (V27: 手機流暢拖曳 + 消除藍色罩子版) ---
+// --- script.js (V28: 單雙擊共存 + 亮色模式 + 全體旋轉版) ---
 
 const GRID_SIZE = 8;
 const TILE_SIZE = 40;  
 const PREVIEW_TILE_SIZE = 24; 
 const GAP = 2;
-const BOARD_COLOR = '#34495e'; 
-const EMPTY_COLOR = '#2c3e50'; 
+
+// 【修改】為了能動態切換亮色/深色主題，將 const 改為 let
+let BOARD_COLOR = '#34495e'; 
+let EMPTY_COLOR = '#2c3e50'; 
+let isLightTheme = false; // 記錄目前的主題狀態
 
 const FINGER_OFFSET = 80; 
 
@@ -95,8 +98,8 @@ function initGame() {
     
     if (!window.gameInitialized) {
         bindInputEvents();
-        bindTitleDoubleClick(); 
-        bindScoreDoubleClick(); 
+        bindTitleTaps(); 
+        bindScoreTaps(); 
         window.gameInitialized = true;
     }
 }
@@ -105,56 +108,102 @@ restartBtn.addEventListener('click', () => {
     initGame();
 });
 
-function bindTitleDoubleClick() {
+// --- 新增：切換主題函數 ---
+function toggleTheme() {
+    isLightTheme = !isLightTheme;
+    if (isLightTheme) {
+        document.body.classList.add('light-theme');
+        BOARD_COLOR = '#bdc3c7'; // 亮色系網格邊框
+        EMPTY_COLOR = '#ecf0f1'; // 亮色系網格底色
+    } else {
+        document.body.classList.remove('light-theme');
+        BOARD_COLOR = '#34495e'; // 原本的深色
+        EMPTY_COLOR = '#2c3e50'; 
+    }
+    drawBoard(); // 重新繪製畫布以套用新顏色
+}
+
+// --- 更新：標題單擊(切換主題)與雙擊(隱藏) ---
+function bindTitleTaps() {
     const titleElement = document.querySelector('.header h1');
     if (!titleElement) return;
+    
     let lastTapTime = 0;
+    let clickTimer = null;
+
     const handleTitleTap = (e) => {
         const currentTime = new Date().getTime();
         const tapLength = currentTime - lastTapTime;
+        
         if (tapLength > 0 && tapLength < 300) {
+            // 雙擊成立，取消等待單擊的計時器
+            clearTimeout(clickTimer);
             document.body.classList.toggle('hide-stickers');
-            lastTapTime = 0;
+            lastTapTime = 0; 
             if (window.getSelection) window.getSelection().removeAllRanges();
         } else {
+            // 可能是單擊，等待 300 毫秒看有沒有第二下
             lastTapTime = currentTime;
+            clickTimer = setTimeout(() => {
+                toggleTheme(); // 單擊動作
+                lastTapTime = 0;
+            }, 300);
         }
     };
-    titleElement.addEventListener('mousedown', handleTitleTap);
-    titleElement.addEventListener('touchstart', handleTitleTap, { passive: true });
+    
+    // 使用 pointerdown 取代 touch/mouse 避免手機雙重觸發
+    titleElement.addEventListener('pointerdown', handleTitleTap);
 }
 
-function bindScoreDoubleClick() {
+// --- 更新：分數單擊(全體旋轉)與雙擊(洗牌) ---
+function bindScoreTaps() {
     if (!scoreElement) return;
+    
     let lastTapTime = 0;
+    let clickTimer = null;
+
     const handleScoreTap = (e) => {
         const currentTime = new Date().getTime();
         const tapLength = currentTime - lastTapTime;
+        
         if (tapLength > 0 && tapLength < 300) {
-            
+            // 雙擊成立：洗牌
+            clearTimeout(clickTimer);
             const stickers = document.querySelectorAll('.sticker');
             stickers.forEach(el => {
-                // 【核心修改】先加上 shuffling 類別，讓 CSS 產生飛行過渡動畫
                 el.classList.add('shuffling');
-                
                 const pos = getRandomValidPosition(TILE_SIZE);
                 el.style.left = pos.x + 'px';
                 el.style.top = pos.y + 'px';
-                
-                // 【核心修改】500 毫秒 (動畫結束後) 拔掉 shuffling 類別，這樣手指拖曳才不會延遲
-                setTimeout(() => {
-                    el.classList.remove('shuffling');
-                }, 500);
+                setTimeout(() => el.classList.remove('shuffling'), 500);
             });
-
             lastTapTime = 0;
             if (window.getSelection) window.getSelection().removeAllRanges();
         } else {
+            // 單擊成立：全體旋轉
             lastTapTime = currentTime;
+            clickTimer = setTimeout(() => {
+                const stickers = document.querySelectorAll('.sticker');
+                stickers.forEach(el => {
+                    el.classList.add('spinning'); // 掛上長動畫
+                    
+                    // 讀取該圖片目前的旋轉角度並 +360
+                    let currentRot = parseFloat(el.dataset.rot || 0);
+                    currentRot += 360;
+                    
+                    // 寫回 DOM 與 CSS 變數
+                    el.dataset.rot = currentRot;
+                    el.style.setProperty('--rot', currentRot + 'deg');
+                    
+                    // 800 毫秒後拔掉長動畫，恢復原本拖曳時的短動畫手感
+                    setTimeout(() => el.classList.remove('spinning'), 800);
+                });
+                lastTapTime = 0;
+            }, 300);
         }
     };
-    scoreElement.addEventListener('mousedown', handleScoreTap);
-    scoreElement.addEventListener('touchstart', handleScoreTap, { passive: true });
+    
+    scoreElement.addEventListener('pointerdown', handleScoreTap);
 }
 
 function getRandomValidPosition(size) {
@@ -757,6 +806,9 @@ function spawnSticker() {
     img.src = specialImg.src;
     img.className = 'sticker';
     
+    // 【修改】將初始旋轉記錄寫入 DOM
+    img.dataset.rot = "0"; 
+
     const size = TILE_SIZE; 
     img.style.width = size + 'px';
     img.style.height = size + 'px';
@@ -774,7 +826,6 @@ function spawnSticker() {
 
 function makeStickerDraggable(el) {
     let startX, startY, initialLeft, initialTop;
-    let currentRotation = 0; 
     let lastTapTime = 0;     
 
     const startDrag = (e) => {
@@ -785,7 +836,10 @@ function makeStickerDraggable(el) {
         const tapLength = currentTime - lastTapTime;
         
         if (tapLength > 0 && tapLength < 300) {
+            // 【修改】透過 dataset 讀寫，以與單擊全體旋轉功能保持同步
+            let currentRotation = parseFloat(el.dataset.rot || 0);
             currentRotation += 45;
+            el.dataset.rot = currentRotation;
             el.style.setProperty('--rot', currentRotation + 'deg');
             lastTapTime = 0; 
             return; 
