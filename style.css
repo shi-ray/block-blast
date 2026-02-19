@@ -40,6 +40,8 @@ body {
 
 #score {
     color: #fff;
+    user-select: none; 
+    cursor: pointer;   
 }
 
 canvas {
@@ -152,12 +154,13 @@ canvas {
     user-select: none;
     filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));
     transform: rotate(var(--rot, 0deg));
-    transition: transform 0.1s, opacity 0.2s ease-in-out;
+    transition: transform 0.1s, opacity 0.2s ease-in-out, left 0.5s ease, top 0.5s ease;
 }
 
 .sticker:active {
     cursor: grabbing;
     transform: scale(1.1) rotate(var(--rot, 0deg));
+    transition: transform 0.1s, opacity 0.2s; 
 }
 
 .header h1 {

@@ -1,4 +1,4 @@
-// --- script.js (V25: 標題雙點隱藏貼紙 + 暴力驗證版) ---
+// --- script.js (V26: 分數雙點洗牌 + 標題淨空 + 貼紙收集系統版) ---
 
 const GRID_SIZE = 8;
 const TILE_SIZE = 40;  
@@ -93,10 +93,10 @@ function initGame() {
     generateShapes(); 
     drawBoard();
     
-    // 綁定遊戲輸入與標題雙擊事件 (只綁定一次)
     if (!window.gameInitialized) {
         bindInputEvents();
-        bindTitleDoubleClick(); // --- 新增：呼叫標題雙點事件綁定 ---
+        bindTitleDoubleClick(); 
+        bindScoreDoubleClick(); // --- 新增：綁定分數雙點洗牌事件 ---
         window.gameInitialized = true;
     }
 }
@@ -105,37 +105,79 @@ restartBtn.addEventListener('click', () => {
     initGame();
 });
 
-// --- 新增：標題雙點擊邏輯 ---
+// --- 標題雙擊：淨空模式 ---
 function bindTitleDoubleClick() {
     const titleElement = document.querySelector('.header h1');
     if (!titleElement) return;
-
     let lastTapTime = 0;
-
     const handleTitleTap = (e) => {
         const currentTime = new Date().getTime();
         const tapLength = currentTime - lastTapTime;
-        
-        // 雙擊判定 (時間差小於 300 毫秒)
         if (tapLength > 0 && tapLength < 300) {
-            // 切換 body 的 class
             document.body.classList.toggle('hide-stickers');
-            
-            // 雙擊後重置計時器
             lastTapTime = 0;
-            
-            // 清除可能因為雙擊產生的文字反白 (防呆)
-            if (window.getSelection) {
-                window.getSelection().removeAllRanges();
-            }
+            if (window.getSelection) window.getSelection().removeAllRanges();
         } else {
             lastTapTime = currentTime;
         }
     };
-
     titleElement.addEventListener('mousedown', handleTitleTap);
     titleElement.addEventListener('touchstart', handleTitleTap, { passive: true });
 }
+
+// --- 新增：分數雙擊：洗牌模式 ---
+function bindScoreDoubleClick() {
+    if (!scoreElement) return;
+    let lastTapTime = 0;
+    const handleScoreTap = (e) => {
+        const currentTime = new Date().getTime();
+        const tapLength = currentTime - lastTapTime;
+        if (tapLength > 0 && tapLength < 300) {
+            
+            // 取得畫面上所有的貼紙，重新賦予隨機座標
+            const stickers = document.querySelectorAll('.sticker');
+            stickers.forEach(el => {
+                const pos = getRandomValidPosition(TILE_SIZE);
+                el.style.left = pos.x + 'px';
+                el.style.top = pos.y + 'px';
+            });
+
+            lastTapTime = 0;
+            if (window.getSelection) window.getSelection().removeAllRanges();
+        } else {
+            lastTapTime = currentTime;
+        }
+    };
+    scoreElement.addEventListener('mousedown', handleScoreTap);
+    scoreElement.addEventListener('touchstart', handleScoreTap, { passive: true });
+}
+
+// --- 新增：獨立抽出的隨機座標生成器 (DRY 原則) ---
+function getRandomValidPosition(size) {
+    const gameContainer = document.getElementById('game-container');
+    const rect = gameContainer.getBoundingClientRect();
+
+    let x = 0, y = 0;
+    let overlap = true;
+    let attempts = 0;
+    const padding = 10; 
+
+    while (overlap && attempts < 100) {
+        x = padding + Math.random() * (window.innerWidth - size - padding * 2);
+        y = padding + Math.random() * (window.innerHeight - size - padding * 2);
+
+        // AABB 碰撞偵測，避開主遊戲區
+        if (x < rect.right && x + size > rect.left &&
+            y < rect.bottom && y + size > rect.top) {
+            overlap = true;
+        } else {
+            overlap = false;
+        }
+        attempts++;
+    }
+    return { x, y };
+}
+
 
 function updatePreviewClears(r, c, matrix) {
     previewClearRows = [];
@@ -708,6 +750,7 @@ function finalizeClear(rows, cols) {
     }
 }
 
+// --- 修改：使用獨立的座標生成函數 ---
 function spawnSticker() {
     const img = document.createElement('img');
     img.src = specialImg.src;
@@ -717,29 +760,10 @@ function spawnSticker() {
     img.style.width = size + 'px';
     img.style.height = size + 'px';
 
-    const gameContainer = document.getElementById('game-container');
-    const rect = gameContainer.getBoundingClientRect();
+    const pos = getRandomValidPosition(size);
 
-    let x = 0, y = 0;
-    let overlap = true;
-    let attempts = 0;
-    const padding = 10; 
-
-    while (overlap && attempts < 100) {
-        x = padding + Math.random() * (window.innerWidth - size - padding * 2);
-        y = padding + Math.random() * (window.innerHeight - size - padding * 2);
-
-        if (x < rect.right && x + size > rect.left &&
-            y < rect.bottom && y + size > rect.top) {
-            overlap = true;
-        } else {
-            overlap = false;
-        }
-        attempts++;
-    }
-
-    img.style.left = x + 'px';
-    img.style.top = y + 'px';
+    img.style.left = pos.x + 'px';
+    img.style.top = pos.y + 'px';
     highestZIndex++;
     img.style.zIndex = highestZIndex;
     document.body.appendChild(img);
