@@ -152,18 +152,29 @@ canvas {
     position: absolute;
     cursor: grab;
     user-select: none;
-    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5)) hue-rotate(var(--hue, 0deg));
     transform: rotate(var(--rot, 0deg));
-    transition: transform 0.1s, opacity 0.2s ease-in-out;
+    transition: transform 0.1s, opacity 0.2s ease-in-out, filter 0.3s;
 }
 
 .sticker:active {
     cursor: grabbing;
     transform: scale(1.1) rotate(var(--rot, 0deg));
+    transition: transform 0.1s, opacity 0.2s; 
 }
 
 .sticker.shuffling {
-    transition: transform 0.1s, opacity 0.2s ease-in-out, left 0.5s ease, top 0.5s ease;
+    transition: transform 0.1s, opacity 0.2s ease-in-out, left 0.5s ease, top 0.5s ease, filter 0.3s;
+}
+
+.sticker.evolve-anim {
+    animation: evolvePop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes evolvePop {
+    0% { transform: scale(0) rotate(0deg); filter: brightness(2) contrast(1.5) hue-rotate(var(--hue, 0deg)); }
+    50% { filter: brightness(1.5) contrast(1.2) drop-shadow(0 0 20px #fff) hue-rotate(var(--hue, 0deg)); }
+    100% { transform: scale(1) rotate(var(--rot, 0deg)); filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5)) hue-rotate(var(--hue, 0deg)); }
 }
 
 .header h1 {

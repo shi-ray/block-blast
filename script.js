@@ -1,20 +1,31 @@
-// --- script.js (V28: 單雙擊共存 + 亮色模式 + 全體旋轉版) ---
+// --- script.js (V30: 多階圖檔進化 + 預載入 + 暴力驗證版) ---
 
 const GRID_SIZE = 8;
 const TILE_SIZE = 40;  
 const PREVIEW_TILE_SIZE = 24; 
 const GAP = 2;
 
-// 【修改】為了能動態切換亮色/深色主題，將 const 改為 let
 let BOARD_COLOR = '#34495e'; 
 let EMPTY_COLOR = '#2c3e50'; 
-let isLightTheme = false; // 記錄目前的主題狀態
+let isLightTheme = false; 
 
 const FINGER_OFFSET = 80; 
 
-const PATTERN_PROBABILITY = 0.15; 
+// --- 圖案設定與預載入 ---
+const PATTERN_PROBABILITY = 0.2; 
+
+// 1階圖案 (網格上生成的預設圖案)
 const specialImg = new Image();
 specialImg.src = 'icon.png'; 
+
+// 2階圖案 (預先載入，避免合成瞬間破圖)
+const specialImg2 = new Image();
+specialImg2.src = 'icon2.png';
+
+// 3階圖案 (預先載入)
+const specialImg3 = new Image();
+specialImg3.src = 'icon3.png';
+
 
 const COLORS = [
     '#e74c3c', '#e67e22', '#2ecc71', '#3498db', '#9b59b6'  
@@ -108,22 +119,20 @@ restartBtn.addEventListener('click', () => {
     initGame();
 });
 
-// --- 新增：切換主題函數 ---
 function toggleTheme() {
     isLightTheme = !isLightTheme;
     if (isLightTheme) {
         document.body.classList.add('light-theme');
-        BOARD_COLOR = '#bdc3c7'; // 亮色系網格邊框
-        EMPTY_COLOR = '#ecf0f1'; // 亮色系網格底色
+        BOARD_COLOR = '#bdc3c7'; 
+        EMPTY_COLOR = '#ecf0f1'; 
     } else {
         document.body.classList.remove('light-theme');
-        BOARD_COLOR = '#34495e'; // 原本的深色
+        BOARD_COLOR = '#34495e'; 
         EMPTY_COLOR = '#2c3e50'; 
     }
-    drawBoard(); // 重新繪製畫布以套用新顏色
+    drawBoard(); 
 }
 
-// --- 更新：標題單擊(切換主題)與雙擊(隱藏) ---
 function bindTitleTaps() {
     const titleElement = document.querySelector('.header h1');
     if (!titleElement) return;
@@ -136,26 +145,22 @@ function bindTitleTaps() {
         const tapLength = currentTime - lastTapTime;
         
         if (tapLength > 0 && tapLength < 300) {
-            // 雙擊成立，取消等待單擊的計時器
             clearTimeout(clickTimer);
             document.body.classList.toggle('hide-stickers');
             lastTapTime = 0; 
             if (window.getSelection) window.getSelection().removeAllRanges();
         } else {
-            // 可能是單擊，等待 300 毫秒看有沒有第二下
             lastTapTime = currentTime;
             clickTimer = setTimeout(() => {
-                toggleTheme(); // 單擊動作
+                toggleTheme(); 
                 lastTapTime = 0;
             }, 300);
         }
     };
     
-    // 使用 pointerdown 取代 touch/mouse 避免手機雙重觸發
     titleElement.addEventListener('pointerdown', handleTitleTap);
 }
 
-// --- 更新：分數單擊(全體旋轉)與雙擊(洗牌) ---
 function bindScoreTaps() {
     if (!scoreElement) return;
     
@@ -167,12 +172,12 @@ function bindScoreTaps() {
         const tapLength = currentTime - lastTapTime;
         
         if (tapLength > 0 && tapLength < 300) {
-            // 雙擊成立：洗牌
             clearTimeout(clickTimer);
             const stickers = document.querySelectorAll('.sticker');
             stickers.forEach(el => {
                 el.classList.add('shuffling');
-                const pos = getRandomValidPosition(TILE_SIZE);
+                const currentSize = parseFloat(el.style.width) || TILE_SIZE;
+                const pos = getRandomValidPosition(currentSize);
                 el.style.left = pos.x + 'px';
                 el.style.top = pos.y + 'px';
                 setTimeout(() => el.classList.remove('shuffling'), 500);
@@ -180,22 +185,15 @@ function bindScoreTaps() {
             lastTapTime = 0;
             if (window.getSelection) window.getSelection().removeAllRanges();
         } else {
-            // 單擊成立：全體旋轉
             lastTapTime = currentTime;
             clickTimer = setTimeout(() => {
                 const stickers = document.querySelectorAll('.sticker');
                 stickers.forEach(el => {
-                    el.classList.add('spinning'); // 掛上長動畫
-                    
-                    // 讀取該圖片目前的旋轉角度並 +360
+                    el.classList.add('spinning'); 
                     let currentRot = parseFloat(el.dataset.rot || 0);
                     currentRot += 360;
-                    
-                    // 寫回 DOM 與 CSS 變數
                     el.dataset.rot = currentRot;
                     el.style.setProperty('--rot', currentRot + 'deg');
-                    
-                    // 800 毫秒後拔掉長動畫，恢復原本拖曳時的短動畫手感
                     setTimeout(() => el.classList.remove('spinning'), 800);
                 });
                 lastTapTime = 0;
@@ -801,18 +799,44 @@ function finalizeClear(rows, cols) {
     }
 }
 
-function spawnSticker() {
+// --- 更新：依據階級設定不同的圖檔來源 ---
+function createStickerNode(tier) {
     const img = document.createElement('img');
-    img.src = specialImg.src;
-    img.className = 'sticker';
     
-    // 【修改】將初始旋轉記錄寫入 DOM
-    img.dataset.rot = "0"; 
+    if (tier === 1) {
+        img.src = 'icon.png';
+    } else if (tier === 2) {
+        img.src = 'icon2.png';
+    } else {
+        // 3 階 (包含以上) 都預設使用 icon3.png
+        img.src = 'icon3.png';
+    }
 
-    const size = TILE_SIZE; 
+    img.className = 'sticker evolve-anim'; 
+    img.dataset.rot = "0";
+    img.dataset.tier = tier;
+
+    // 每升一階，尺寸加大 15px
+    const size = TILE_SIZE + (tier - 1) * 15;
     img.style.width = size + 'px';
     img.style.height = size + 'px';
 
+    // 如果達到 4 階或以上，我們依然提供無上限的色相變化機制，讓神級玩家有額外驚喜
+    if (tier > 3) {
+        const hueShift = (tier - 3) * 70; 
+        img.style.setProperty('--hue', hueShift + 'deg');
+    } else {
+        // 確保 1、2、3 階使用原圖顏色，沒有色偏
+        img.style.setProperty('--hue', '0deg');
+    }
+
+    setTimeout(() => img.classList.remove('evolve-anim'), 600);
+    
+    return { img, size };
+}
+
+function spawnSticker() {
+    const { img, size } = createStickerNode(1);
     const pos = getRandomValidPosition(size);
 
     img.style.left = pos.x + 'px';
@@ -822,6 +846,61 @@ function spawnSticker() {
     document.body.appendChild(img);
 
     makeStickerDraggable(img);
+}
+
+function spawnMergedSticker(cx, cy, tier) {
+    const { img, size } = createStickerNode(tier);
+    
+    let left = cx - size / 2;
+    let top = cy - size / 2;
+
+    img.style.left = left + 'px';
+    img.style.top = top + 'px';
+    highestZIndex++;
+    img.style.zIndex = highestZIndex;
+    document.body.appendChild(img);
+
+    makeStickerDraggable(img);
+}
+
+function checkMerge(droppedSticker) {
+    const tier = parseInt(droppedSticker.dataset.tier || 1);
+    const rect1 = droppedSticker.getBoundingClientRect();
+    const cx1 = rect1.left + rect1.width / 2;
+    const cy1 = rect1.top + rect1.height / 2;
+
+    const allStickers = Array.from(document.querySelectorAll('.sticker'));
+    const sameTierStickers = allStickers.filter(el => parseInt(el.dataset.tier || 1) === tier);
+
+    let cluster = [];
+    const MERGE_RADIUS = 40; 
+
+    for (let el of sameTierStickers) {
+        const rect2 = el.getBoundingClientRect();
+        const cx2 = rect2.left + rect2.width / 2;
+        const cy2 = rect2.top + rect2.height / 2;
+        const dist = Math.hypot(cx1 - cx2, cy1 - cy2);
+        
+        if (dist <= MERGE_RADIUS) {
+            cluster.push(el);
+        }
+    }
+
+    if (cluster.length >= 15) {
+        const toMerge = cluster.slice(0, 15);
+        
+        let avgCx = 0, avgCy = 0;
+        toMerge.forEach(el => {
+            const r = el.getBoundingClientRect();
+            avgCx += r.left + r.width / 2;
+            avgCy += r.top + r.height / 2;
+            el.remove(); 
+        });
+        avgCx /= 15;
+        avgCy /= 15;
+
+        spawnMergedSticker(avgCx, avgCy, tier + 1);
+    }
 }
 
 function makeStickerDraggable(el) {
@@ -836,7 +915,6 @@ function makeStickerDraggable(el) {
         const tapLength = currentTime - lastTapTime;
         
         if (tapLength > 0 && tapLength < 300) {
-            // 【修改】透過 dataset 讀寫，以與單擊全體旋轉功能保持同步
             let currentRotation = parseFloat(el.dataset.rot || 0);
             currentRotation += 45;
             el.dataset.rot = currentRotation;
@@ -868,7 +946,9 @@ function makeStickerDraggable(el) {
             document.removeEventListener('mousemove', moveDrag);
             document.removeEventListener('touchmove', moveDrag);
             document.removeEventListener('mouseup', endDrag);
-            document.removeEventListener('touchend', endDrag);
+            document.removeEventListener('touchmove', endDrag);
+            
+            checkMerge(el);
         };
 
         document.addEventListener('mousemove', moveDrag);
