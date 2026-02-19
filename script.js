@@ -1,3 +1,5 @@
+// --- script.js (V36: 加入通關時間顯示) ---
+
 const GRID_SIZE = 8;
 const TILE_SIZE = 40;  
 const PREVIEW_TILE_SIZE = 24; 
@@ -9,12 +11,15 @@ let isLightTheme = false;
 
 const FINGER_OFFSET = 80; 
 
+// 1階圖案
 const specialImg = new Image();
 specialImg.src = 'icon.png'; 
 
+// 2階圖案
 const specialImg2 = new Image();
 specialImg2.src = 'icon2.png';
 
+// 3階圖案
 const specialImg3 = new Image();
 specialImg3.src = 'icon3.png';
 
@@ -28,6 +33,7 @@ let shapes = [];
 let score = 0;
 let isAnimating = false; 
 let firstGenerationMode = true;
+let gameStartTime = 0; // 新增：紀錄遊戲開始時間
 
 let highestZIndex = 100; 
 
@@ -84,9 +90,108 @@ const gameOverModal = document.getElementById('game-over-modal');
 const finalScoreElement = document.getElementById('final-score');
 const restartBtn = document.getElementById('restart-btn');
 
+// --- 動態生成破關與彩蛋畫面 ---
+function setupGameClearModal() {
+    if (document.getElementById('game-clear-modal')) return;
+
+    const modal = document.createElement('div');
+    modal.id = 'game-clear-modal';
+    modal.className = 'hidden'; 
+    
+    Object.assign(modal.style, {
+        position: 'absolute', top: '0', left: '0', width: '100%', height: '100%',
+        backgroundColor: 'rgba(0, 0, 0, 0.85)', display: 'flex', justifyContent: 'center',
+        alignItems: 'center', zIndex: '2000', borderRadius: '8px', backdropFilter: 'blur(4px)'
+    });
+
+    const content = document.createElement('div');
+    content.id = 'game-clear-content'; 
+    content.className = 'modal-content';
+    content.style.borderColor = '#f1c40f'; 
+    content.style.textAlign = 'center';
+
+    modal.appendChild(content);
+    document.getElementById('game-container').appendChild(modal);
+}
+
+function renderMainView() {
+    const content = document.getElementById('game-clear-content');
+    if (!content) return;
+
+    // 計算通關時間
+    const timeElapsed = Math.floor((Date.now() - gameStartTime) / 1000);
+    const minutes = Math.floor(timeElapsed / 60);
+    const seconds = timeElapsed % 60;
+    const timeString = minutes > 0 ? `${minutes}分${seconds}秒` : `${seconds}秒`;
+
+    content.innerHTML = `
+        <h2 style="color: #f1c40f; margin: 0 0 15px 0; font-size: 2rem; text-shadow: 0 0 10px rgba(241,196,15,0.5);">感謝遊玩！</h2>
+        <p style="font-size: 1.2rem; margin-bottom: 5px;">您的善款將直接幫助我！</p>
+        <p style="font-size: 1rem; margin-bottom: 25px; color: #bdc3c7;">通關時間：${timeString}</p>
+        <div style="display: flex; justify-content: center; gap: 15px;">
+            <button id="btn-no" style="background-color: #95a5a6; color: white; border: none; padding: 10px 20px; font-size: 1.1rem; border-radius: 50px; cursor: pointer; transition: transform 0.1s;">不了</button>
+            <button id="btn-yes" style="background-color: #e74c3c; color: white; border: none; padding: 10px 20px; font-size: 1.1rem; border-radius: 50px; cursor: pointer; transition: transform 0.1s;">我要支持</button>
+        </div>
+    `;
+    
+    document.getElementById('btn-no').onclick = renderNoView;
+    document.getElementById('btn-yes').onclick = renderYesView;
+    addClickEffect('btn-no');
+    addClickEffect('btn-yes');
+}
+
+function renderNoView() {
+    const content = document.getElementById('game-clear-content');
+    content.innerHTML = `
+        <h2 style="color: #f1c40f; margin: 0 0 25px 0; font-size: 2rem;">喔</h2>
+        <button id="btn-confirm" style="background-color: #f1c40f; color: #2c3e50; border: none; padding: 12px 24px; font-size: 1.1rem; border-radius: 50px; cursor: pointer; font-weight: bold; transition: transform 0.1s;">確認</button>
+    `;
+    document.getElementById('btn-confirm').onclick = closeModal;
+    addClickEffect('btn-confirm');
+}
+
+function renderYesView() {
+    const content = document.getElementById('game-clear-content');
+    content.innerHTML = `
+        <h2 style="color: #f1c40f; margin: 0 0 15px 0; font-size: 2rem;">開玩笑的哈哈</h2>
+        <p style="font-size: 1.2rem; margin-bottom: 25px; line-height: 1.5;">該不會有人真信了吧，<br>總之恭喜您通關遊戲</p>
+        <button id="btn-creator" style="background-color: #f1c40f; color: #2c3e50; border: none; padding: 12px 24px; font-size: 1.1rem; border-radius: 50px; cursor: pointer; font-weight: bold; transition: transform 0.1s;">創作者：shiray</button>
+    `;
+    document.getElementById('btn-creator').onclick = closeModal;
+    addClickEffect('btn-creator');
+}
+
+function closeModal() {
+    document.getElementById('game-clear-modal').classList.add('hidden');
+}
+
+function addClickEffect(id) {
+    const btn = document.getElementById(id);
+    if(!btn) return;
+    btn.addEventListener('mousedown', () => btn.style.transform = 'scale(0.95)');
+    btn.addEventListener('mouseup', () => btn.style.transform = 'scale(1)');
+    btn.addEventListener('touchstart', () => btn.style.transform = 'scale(0.95)', {passive: true});
+    btn.addEventListener('touchend', () => btn.style.transform = 'scale(1)');
+}
+
+function showGameClearScreen() {
+    renderMainView(); // 在顯示前先動態抓取最新時間渲染
+    document.getElementById('game-clear-modal').classList.remove('hidden');
+}
+
+// --- 機率計算 ---
 function getPatternProbability() {
     let prob = 0.2 + (Math.floor(score / 2) * 0.01);
     return Math.min(prob, 0.8);
+}
+
+// --- 開發者作弊指令 ---
+function bindCheatKeys() {
+    document.addEventListener('keydown', (e) => {
+        if (e.key === '*') {
+            showGameClearScreen();
+        }
+    });
 }
 
 function initGame() {
@@ -95,11 +200,14 @@ function initGame() {
     score = 0;
     isAnimating = false;
     firstGenerationMode = true;
+    gameStartTime = Date.now(); // 遊戲重啟時重置時間
+
     updateScore(0);
     gameOverModal.classList.add('hidden');
     
     document.querySelectorAll('.sticker').forEach(el => el.remove());
     
+    setupGameClearModal(); 
     generateShapes(); 
     drawBoard();
     
@@ -107,6 +215,7 @@ function initGame() {
         bindInputEvents();
         bindTitleTaps(); 
         bindScoreTaps(); 
+        bindCheatKeys(); 
         window.gameInitialized = true;
     }
 }
@@ -435,7 +544,8 @@ function generateShapes() {
     if (!safeBatch) {
         safeBatch = [[[1]], [[1]], [[1]]];
         if (!isBatchAbsolutelySafe(grid, safeBatch)) {
-            showGameOverScreen();
+            finalScoreElement.innerText = score;
+            gameOverModal.classList.remove('hidden'); 
             return;
         }
     }
@@ -688,11 +798,6 @@ function placeShape(shapeObj, r, c) {
     drawBoard();
 }
 
-function showGameOverScreen() {
-    finalScoreElement.innerText = score;
-    gameOverModal.classList.remove('hidden'); 
-}
-
 function checkAndAnimateLines() {
     let linesToClearRows = [];
     let linesToClearCols = [];
@@ -815,7 +920,12 @@ function createStickerNode(tier) {
     img.style.width = size + 'px';
     img.style.height = size + 'px';
 
-    img.style.setProperty('--hue', '0deg');
+    if (tier > 3) {
+        const hueShift = (tier - 3) * 70; 
+        img.style.setProperty('--hue', hueShift + 'deg');
+    } else {
+        img.style.setProperty('--hue', '0deg');
+    }
 
     setTimeout(() => img.classList.remove('evolve-anim'), 600);
     
@@ -853,7 +963,7 @@ function spawnMergedSticker(cx, cy, tier) {
 function checkMerge(droppedSticker) {
     const tier = parseInt(droppedSticker.dataset.tier || 1);
     
-    if (tier >= 3) return;
+    if (tier >= 4) return;
 
     const rect1 = droppedSticker.getBoundingClientRect();
     const cx1 = rect1.left + rect1.width / 2;
@@ -889,7 +999,12 @@ function checkMerge(droppedSticker) {
         avgCx /= 15;
         avgCy /= 15;
 
-        spawnMergedSticker(avgCx, avgCy, tier + 1);
+        if (tier === 3) {
+            showGameClearScreen();
+            spawnMergedSticker(avgCx, avgCy, 4);
+        } else {
+            spawnMergedSticker(avgCx, avgCy, tier + 1);
+        }
     }
 }
 
