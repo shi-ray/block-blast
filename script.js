@@ -1,4 +1,4 @@
-// --- script.js (V17: 五彩方塊 + 預覽白框 + 暴力驗證版) ---
+// --- script.js (V19: 手指防遮擋 + 全區域感應 + 顏色 + 預覽白框 + 暴力驗證版) ---
 
 // --- 1. 參數設定 ---
 const GRID_SIZE = 8;
@@ -8,13 +8,15 @@ const GAP = 2;
 const BOARD_COLOR = '#34495e'; 
 const EMPTY_COLOR = '#2c3e50'; 
 
-// --- 新增：定義五種顏色 ---
+// --- 新增：手指向上偏移量 (預設 60px，大約是 1.5 個格子) ---
+const FINGER_OFFSET = 60; 
+
 const COLORS = [
-    '#e74c3c', // 紅色 (Red)
-    '#e67e22', // 橙色 (Orange)
-    '#2ecc71', // 綠色 (Green)
-    '#3498db', // 藍色 (Blue)
-    '#9b59b6'  // 紫色 (Purple)
+    '#e74c3c', 
+    '#e67e22', 
+    '#2ecc71', 
+    '#3498db', 
+    '#9b59b6'  
 ];
 
 // --- 2. 遊戲狀態 ---
@@ -105,12 +107,11 @@ function updatePreviewClears(r, c, matrix) {
     for (let i = 0; i < matrix.length; i++) {
         for (let j = 0; j < matrix[0].length; j++) {
             if (matrix[i][j] === 1) {
-                tempGrid[r + i][c + j] = 1; // 模擬放置時只要填 1 即可判斷連線
+                tempGrid[r + i][c + j] = 1; 
             }
         }
     }
 
-    // --- 修改：連線判斷從 === 1 改為 !== 0 (相容顏色代碼) ---
     for (let row = 0; row < GRID_SIZE; row++) {
         if (tempGrid[row].every(val => val !== 0)) previewClearRows.push(row);
     }
@@ -130,7 +131,6 @@ function drawBoard() {
 
     for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
-            // --- 修改：抓取真實顏色 ---
             let cellValue = grid[r][c];
             let isToBeCleared = cellValue !== 0 && (previewClearRows.includes(r) || previewClearCols.includes(c));
             
@@ -139,7 +139,6 @@ function drawBoard() {
     }
 
     if (draggingShape && isPreviewValid) {
-        // --- 修改：使用方塊本身的顏色，並加入半透明度 ---
         ctx.globalAlpha = 0.5;
         const matrix = draggingShape.data;
         for (let i = 0; i < matrix.length; i++) {
@@ -149,7 +148,7 @@ function drawBoard() {
                 }
             }
         }
-        ctx.globalAlpha = 1.0; // 畫完後重置透明度
+        ctx.globalAlpha = 1.0; 
     }
 }
 
@@ -186,7 +185,7 @@ function bindInputEvents() {
 
         const pos = getPointerPos(e);
         const target = document.elementFromPoint(pos.x, pos.y);
-        const shape = shapes.find(s => s.element === target);
+        const shape = shapes.find(s => s.slot === target || s.slot.contains(target));
 
         if (shape) {
             e.preventDefault();
@@ -197,8 +196,9 @@ function bindInputEvents() {
             shape.element.style.width = (shape.cols * TILE_SIZE) + 'px';
             shape.element.style.height = (shape.rows * TILE_SIZE) + 'px';
             
+            // --- 修改核心：加入 FINGER_OFFSET 讓方塊向上錯位 ---
             dragOffsetX = shape.element.width / 2;
-            dragOffsetY = shape.element.height / 2;
+            dragOffsetY = (shape.element.height / 2) + FINGER_OFFSET;
             moveShape(pos.x, pos.y);
 
             const gridPos = calculateGridPosition(pos.x, pos.y);
@@ -235,7 +235,6 @@ function bindInputEvents() {
         const c = previewC;
 
         if (r >= 0 && c >= 0 && isPreviewValid) {
-            // --- 修改：傳入顏色參數 ---
             placeShape(draggingShape.data, r, c, draggingShape.color);
             draggingShape.element.remove();
             shapes = shapes.filter(s => s !== draggingShape);
@@ -310,14 +309,13 @@ function generateShapes() {
         }
     }
 
-    // --- 新增：隨機挑選 3 種不重複的顏色 ---
     let availableColors = [...COLORS];
-    availableColors.sort(() => 0.5 - Math.random()); // 洗牌
+    availableColors.sort(() => 0.5 - Math.random()); 
     let chosenColors = [availableColors[0], availableColors[1], availableColors[2]];
 
     for (let i = 0; i < 3; i++) {
         const template = safeBatch[i];
-        const shapeColor = chosenColors[i]; // 取出專屬顏色
+        const shapeColor = chosenColors[i]; 
         
         const slot = document.createElement('div');
         slot.className = 'shape-slot';
@@ -339,7 +337,7 @@ function generateShapes() {
         shapeCanvas.style.height = (rows * previewScale) + 'px';
         
         const sCtx = shapeCanvas.getContext('2d');
-        sCtx.fillStyle = shapeColor; // 繪製專屬顏色
+        sCtx.fillStyle = shapeColor; 
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
                 if (template[r][c] === 1) {
@@ -352,10 +350,11 @@ function generateShapes() {
             id: Date.now() + i,
             data: template,
             element: shapeCanvas,
+            slot: slot, 
             rows: rows,
             cols: cols,
             previewScale: previewScale,
-            color: shapeColor // 將顏色存入物件中
+            color: shapeColor 
         };
 
         slot.appendChild(shapeCanvas);
@@ -445,7 +444,6 @@ function handleLineClearSim(g) {
     let rowsToClear = [];
     let colsToClear = [];
 
-    // --- 修改：連線判斷從 === 1 改為 !== 0 ---
     for (let r = 0; r < GRID_SIZE; r++) {
         if (g[r].every(val => val !== 0)) rowsToClear.push(r);
     }
@@ -476,7 +474,6 @@ function canPlace(currentGrid, matrix, r, c) {
     for (let i = 0; i < m.length; i++) {
         for (let j = 0; j < m[0].length; j++) {
             if (m[i][j] === 1) {
-                // --- 修改：是否為空從 === 1 改為 !== 0 ---
                 if (g[r + i][c + j] !== 0) return false;
             }
         }
@@ -504,7 +501,6 @@ function moveShape(x, y) {
     draggingShape.element.style.top = (y - dragOffsetY) + 'px';
 }
 
-// --- 修改：新增 color 參數儲存色彩 ---
 function placeShape(matrix, r, c, color) {
     for (let i = 0; i < matrix.length; i++) {
         for (let j = 0; j < matrix[0].length; j++) {
@@ -525,7 +521,6 @@ function checkAndAnimateLines() {
     let linesToClearRows = [];
     let linesToClearCols = [];
 
-    // --- 修改：連線判斷從 === 1 改為 !== 0 ---
     for (let r = 0; r < GRID_SIZE; r++) {
         if (grid[r].every(val => val !== 0)) linesToClearRows.push(r);
     }
