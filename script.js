@@ -1,6 +1,5 @@
-// --- script.js (V22: PNG滿版 + 圖案計分 + 首抽必中 + 暴力驗證版) ---
+// --- script.js (V24: 貼紙雙點旋轉 + 收集系統 + 暴力驗證版) ---
 
-// --- 1. 參數設定 ---
 const GRID_SIZE = 8;
 const TILE_SIZE = 40;  
 const PREVIEW_TILE_SIZE = 24; 
@@ -10,23 +9,22 @@ const EMPTY_COLOR = '#2c3e50';
 
 const FINGER_OFFSET = 80; 
 
-// --- 圖案設定 ---
 const PATTERN_PROBABILITY = 0.15; 
 const specialImg = new Image();
-// --- 修改：換回 PNG ---
 specialImg.src = 'icon.png'; 
 
 const COLORS = [
     '#e74c3c', '#e67e22', '#2ecc71', '#3498db', '#9b59b6'  
 ];
 
-// --- 2. 遊戲狀態 ---
 let grid = []; 
 let specialGrid = []; 
 let shapes = []; 
 let score = 0;
 let isAnimating = false; 
 let firstGenerationMode = true;
+
+let highestZIndex = 100; 
 
 let draggingShape = null; 
 let dragOffsetX = 0;
@@ -89,6 +87,9 @@ function initGame() {
     firstGenerationMode = true;
     updateScore(0);
     gameOverModal.classList.add('hidden');
+    
+    document.querySelectorAll('.sticker').forEach(el => el.remove());
+    
     generateShapes(); 
     drawBoard();
     
@@ -165,7 +166,6 @@ function drawCell(r, c, color, borderColor = null, drawImg = false) {
     ctx.fillStyle = color;
     ctx.fillRect(x, y, size, size);
 
-    // --- 修改：移除 pad，讓圖片滿版繪製 ---
     if (drawImg && specialImg.complete && specialImg.naturalWidth !== 0) {
         ctx.drawImage(specialImg, x, y, size, size);
     }
@@ -384,7 +384,6 @@ function generateShapes() {
                     sCtx.fillRect(cellX, cellY, cellSize, cellSize);
                     
                     if (specialCell && specialCell.r === r && specialCell.c === c) {
-                        // --- 修改：移除預覽圖的 pad，讓圖片滿版繪製 ---
                         if (specialImg.complete && specialImg.naturalWidth !== 0) {
                             sCtx.drawImage(specialImg, cellX, cellY, cellSize, cellSize);
                         } else {
@@ -629,7 +628,6 @@ function runClearAnimation(rows, cols) {
 }
 
 function finalizeClear(rows, cols) {
-    // --- 修改：利用 Set 來蒐集準備被清除的座標，避免交叉點重複計算 ---
     let cellsToClear = new Set();
     
     rows.forEach(r => {
@@ -646,26 +644,26 @@ function finalizeClear(rows, cols) {
 
     let iconsCleared = 0;
     
-    // --- 修改：進行圖案結算並清除陣列資料 ---
     cellsToClear.forEach(coord => {
         let parts = coord.split(',');
         let r = parseInt(parts[0]);
         let c = parseInt(parts[1]);
         
-        // 檢查該座標有沒有圖案
         if (specialGrid[r][c] === 1) {
             iconsCleared++;
         }
         
-        // 清除網格資料
         grid[r][c] = 0;
         specialGrid[r][c] = 0;
     });
 
-    // --- 修改：計分邏輯更新，每個圖案一分 ---
     if (iconsCleared > 0) {
         score += iconsCleared;
         updateScore(score);
+        
+        for (let i = 0; i < iconsCleared; i++) {
+            spawnSticker();
+        }
     }
     
     isAnimating = false; 
@@ -674,6 +672,104 @@ function finalizeClear(rows, cols) {
     if (shapes.length === 0) {
         generateShapes();
     }
+}
+
+function spawnSticker() {
+    const img = document.createElement('img');
+    img.src = specialImg.src;
+    img.className = 'sticker';
+    
+    const size = TILE_SIZE; 
+    img.style.width = size + 'px';
+    img.style.height = size + 'px';
+
+    const gameContainer = document.getElementById('game-container');
+    const rect = gameContainer.getBoundingClientRect();
+
+    let x = 0, y = 0;
+    let overlap = true;
+    let attempts = 0;
+    const padding = 10; 
+
+    while (overlap && attempts < 100) {
+        x = padding + Math.random() * (window.innerWidth - size - padding * 2);
+        y = padding + Math.random() * (window.innerHeight - size - padding * 2);
+
+        if (x < rect.right && x + size > rect.left &&
+            y < rect.bottom && y + size > rect.top) {
+            overlap = true;
+        } else {
+            overlap = false;
+        }
+        attempts++;
+    }
+
+    img.style.left = x + 'px';
+    img.style.top = y + 'px';
+    highestZIndex++;
+    img.style.zIndex = highestZIndex;
+    document.body.appendChild(img);
+
+    makeStickerDraggable(img);
+}
+
+// --- 更新：加入雙點/雙擊旋轉邏輯 ---
+function makeStickerDraggable(el) {
+    let startX, startY, initialLeft, initialTop;
+    let currentRotation = 0; // 記錄目前的旋轉角度
+    let lastTapTime = 0;     // 記錄上一次點擊的時間，用來判定雙擊
+
+    const startDrag = (e) => {
+        e.preventDefault(); 
+        e.stopPropagation(); 
+        
+        // 雙擊判定邏輯 (測量兩次點擊之間的時間差)
+        const currentTime = new Date().getTime();
+        const tapLength = currentTime - lastTapTime;
+        
+        if (tapLength > 0 && tapLength < 300) {
+            // 在 300 毫秒內連續點擊兩次，觸發旋轉！
+            currentRotation += 45;
+            // 透過寫入 CSS 變數，通知 CSS 進行動畫旋轉
+            el.style.setProperty('--rot', currentRotation + 'deg');
+            lastTapTime = 0; // 重置計時器，避免三連擊觸發兩次
+            return; // 雙擊時不進入拖曳模式
+        }
+        lastTapTime = currentTime;
+
+        highestZIndex++;
+        el.style.zIndex = highestZIndex;
+
+        const pos = getPointerPos(e);
+        startX = pos.x;
+        startY = pos.y;
+        initialLeft = parseFloat(el.style.left) || 0;
+        initialTop = parseFloat(el.style.top) || 0;
+
+        const moveDrag = (moveEvent) => {
+            moveEvent.preventDefault();
+            const movePos = getPointerPos(moveEvent);
+            const dx = movePos.x - startX;
+            const dy = movePos.y - startY;
+            el.style.left = (initialLeft + dx) + 'px';
+            el.style.top = (initialTop + dy) + 'px';
+        };
+
+        const endDrag = () => {
+            document.removeEventListener('mousemove', moveDrag);
+            document.removeEventListener('touchmove', moveDrag);
+            document.removeEventListener('mouseup', endDrag);
+            document.removeEventListener('touchend', endDrag);
+        };
+
+        document.addEventListener('mousemove', moveDrag);
+        document.addEventListener('touchmove', moveDrag, { passive: false });
+        document.addEventListener('mouseup', endDrag);
+        document.addEventListener('touchend', endDrag);
+    };
+
+    el.addEventListener('mousedown', startDrag);
+    el.addEventListener('touchstart', startDrag, { passive: false });
 }
 
 function updateScore(s) {
