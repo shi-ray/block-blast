@@ -412,38 +412,109 @@ function bindScoreTaps() {
     
     let lastTapTime = 0;
     let clickTimer = null;
+    let isScoreTapLocked = false; // 新增：防連點的狀態鎖定
 
     const handleScoreTap = (e) => {
+        // 如果目前正在執行飄移或合成動畫，直接忽略此次點擊
+        if (isScoreTapLocked) return;
+
         const currentTime = new Date().getTime();
         const tapLength = currentTime - lastTapTime;
         
         if (tapLength > 0 && tapLength < 300) {
+            // 雙擊功能：輔助合成或各自飄移
             clearTimeout(clickTimer);
-            const stickers = document.querySelectorAll('.sticker');
-            stickers.forEach(el => {
-                el.classList.add('shuffling');
-                const currentSize = parseFloat(el.style.width) || TILE_SIZE;
+            isScoreTapLocked = true; // 上鎖：開始動畫
+            
+            const allStickers = Array.from(document.querySelectorAll('.sticker'));
+            const tier1Stickers = allStickers.filter(el => parseInt(el.dataset.tier || 1) === 1);
+            const tier2Stickers = allStickers.filter(el => parseInt(el.dataset.tier || 1) === 2);
+            
+            let targetStickers = null;
+            
+            // 判斷條件：低階優先
+            if (tier1Stickers.length >= 15) {
+                targetStickers = tier1Stickers;
+            } else if (tier2Stickers.length >= 15) {
+                targetStickers = tier2Stickers;
+            }
+            
+            if (targetStickers) {
+                // 滿足條件：隨機選出 15 隻進行輔助合成
+                const toMerge = targetStickers.sort(() => 0.5 - Math.random()).slice(0, 15);
+                const currentSize = parseFloat(toMerge[0].style.width) || TILE_SIZE;
+                
+                // 決定一個隨機聚集點
                 const pos = getRandomValidPosition(currentSize);
-                el.style.left = pos.x + 'px';
-                el.style.top = pos.y + 'px';
-                setTimeout(() => el.classList.remove('shuffling'), 500);
-            });
-            setTimeout(saveGame, 550); // 打亂後存檔
+                
+                toMerge.forEach(el => {
+                    el.style.pointerEvents = 'none'; // 合成鎖定機制：飛行中禁止拖曳
+                    el.classList.add('shuffling'); 
+                    el.style.left = pos.x + 'px';
+                    el.style.top = pos.y + 'px';
+                    setTimeout(() => {
+                        // 確保元素還存在於畫面上才解除鎖定（避免被 checkMerge 移除後報錯）
+                        if (document.body.contains(el)) {
+                            el.classList.remove('shuffling');
+                            el.style.pointerEvents = '';
+                        }
+                    }, 500);
+                });
+                
+                // 動畫結束後觸發合成、存檔並解鎖
+                setTimeout(() => {
+                    checkMerge(toMerge[0]);
+                    saveGame();
+                    isScoreTapLocked = false; 
+                }, 550);
+            } else {
+                // 未滿足條件：像原來一樣各自飄移 (打亂)
+                allStickers.forEach(el => {
+                    el.style.pointerEvents = 'none'; // 飄移鎖定機制：飛行中禁止拖曳
+                    el.classList.add('shuffling');
+                    const currentSize = parseFloat(el.style.width) || TILE_SIZE;
+                    const pos = getRandomValidPosition(currentSize);
+                    el.style.left = pos.x + 'px';
+                    el.style.top = pos.y + 'px';
+                    setTimeout(() => {
+                        if (document.body.contains(el)) {
+                            el.classList.remove('shuffling');
+                            el.style.pointerEvents = ''; 
+                        }
+                    }, 500);
+                });
+                setTimeout(() => {
+                    saveGame();
+                    isScoreTapLocked = false; // 解鎖
+                }, 550);
+            }
+            
             lastTapTime = 0;
             if (window.getSelection) window.getSelection().removeAllRanges();
         } else {
+            // 單擊功能：所有貼紙原地旋轉
             lastTapTime = currentTime;
             clickTimer = setTimeout(() => {
+                isScoreTapLocked = true; // 上鎖：開始旋轉動畫
                 const stickers = document.querySelectorAll('.sticker');
                 stickers.forEach(el => {
+                    el.style.pointerEvents = 'none'; // 旋轉鎖定機制
                     el.classList.add('spinning'); 
                     let currentRot = parseFloat(el.dataset.rot || 0);
                     currentRot += 360;
                     el.dataset.rot = currentRot;
                     el.style.setProperty('--rot', currentRot + 'deg');
-                    setTimeout(() => el.classList.remove('spinning'), 800);
+                    setTimeout(() => {
+                        if (document.body.contains(el)) {
+                            el.classList.remove('spinning');
+                            el.style.pointerEvents = ''; 
+                        }
+                    }, 800);
                 });
-                setTimeout(saveGame, 850); // 旋轉後存檔
+                setTimeout(() => {
+                    saveGame();
+                    isScoreTapLocked = false; // 解鎖
+                }, 850); 
                 lastTapTime = 0;
             }, 300);
         }
