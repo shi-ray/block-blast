@@ -1,5 +1,3 @@
-// --- script.js (V37: 加入自動存檔與還原進度功能) ---
-
 const GRID_SIZE = 8;
 const TILE_SIZE = 40;  
 const PREVIEW_TILE_SIZE = 24; 
@@ -11,15 +9,20 @@ let isLightTheme = false;
 
 const FINGER_OFFSET = 80; 
 
-// 1階圖案
+const bgm = new Audio('bgm.mp3');
+bgm.loop = true;
+const blastSound = new Audio('blast.mp3');
+const make1Sound = new Audio('make1.mp3');
+const make2Sound = new Audio('make2.mp3');
+const make3Sound = new Audio('make3.mp3');
+let isBgmPlaying = false;
+
 const specialImg = new Image();
 specialImg.src = 'icon.png'; 
 
-// 2階圖案
 const specialImg2 = new Image();
 specialImg2.src = 'icon2.png';
 
-// 3階圖案
 const specialImg3 = new Image();
 specialImg3.src = 'icon3.png';
 
@@ -34,9 +37,8 @@ let score = 0;
 let isAnimating = false; 
 let firstGenerationMode = true;
 
-// 時間追蹤變數
 let gameStartTime = 0; 
-let accumulatedTime = 0; // 紀錄之前遊玩累積的毫秒數
+let accumulatedTime = 0; 
 
 let highestZIndex = 100; 
 
@@ -93,9 +95,22 @@ const gameOverModal = document.getElementById('game-over-modal');
 const finalScoreElement = document.getElementById('final-score');
 const restartBtn = document.getElementById('restart-btn');
 
-// --- 存檔與讀檔系統 ---
+function initAudio() {
+    if (!isBgmPlaying) {
+        let promise = bgm.play();
+        if (promise !== undefined) {
+            promise.then(() => {
+                isBgmPlaying = true;
+                document.removeEventListener('pointerdown', initAudio);
+                document.removeEventListener('keydown', initAudio);
+            }).catch(e => console.warn("BGM play prevented:", e));
+        }
+    }
+}
+document.addEventListener('pointerdown', initAudio);
+document.addEventListener('keydown', initAudio);
+
 function saveGame() {
-    // 更新累加時間
     accumulatedTime += (Date.now() - gameStartTime);
     gameStartTime = Date.now();
 
@@ -194,7 +209,6 @@ function restoreShapes(savedShapes) {
     });
 }
 
-// --- 動態生成破關與彩蛋畫面 ---
 function setupGameClearModal() {
     if (document.getElementById('game-clear-modal')) return;
 
@@ -226,15 +240,15 @@ function renderMainView() {
     const totalSeconds = Math.floor(currentTimeElapsed / 1000);
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
-    const timeString = minutes > 0 ? `${minutes}分${seconds}秒` : `${seconds}秒`;
+    const timeString = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
 
     content.innerHTML = `
-        <h2 style="color: #f1c40f; margin: 0 0 15px 0; font-size: 2rem; text-shadow: 0 0 10px rgba(241,196,15,0.5);">感謝遊玩！</h2>
-        <p style="font-size: 1.2rem; margin-bottom: 5px;">您的善款將直接幫助我！</p>
-        <p style="font-size: 1rem; margin-bottom: 25px; color: #bdc3c7;">通關時間：${timeString}</p>
+        <h2 style="color: #f1c40f; margin: 0 0 15px 0; font-size: 2rem; text-shadow: 0 0 10px rgba(241,196,15,0.5);">Thank You for Playing!</h2>
+        <p style="font-size: 1.2rem; margin-bottom: 5px;">Your donation will directly help me!</p>
+        <p style="font-size: 1rem; margin-bottom: 25px; color: #bdc3c7;">Clear Time: ${timeString}</p>
         <div style="display: flex; justify-content: center; gap: 15px;">
-            <button id="btn-no" style="background-color: #95a5a6; color: white; border: none; padding: 10px 20px; font-size: 1.1rem; border-radius: 50px; cursor: pointer; transition: transform 0.1s;">不了</button>
-            <button id="btn-yes" style="background-color: #e74c3c; color: white; border: none; padding: 10px 20px; font-size: 1.1rem; border-radius: 50px; cursor: pointer; transition: transform 0.1s;">我要支持</button>
+            <button id="btn-no" style="background-color: #95a5a6; color: white; border: none; padding: 10px 20px; font-size: 1.1rem; border-radius: 50px; cursor: pointer; transition: transform 0.1s;">No Thanks</button>
+            <button id="btn-yes" style="background-color: #e74c3c; color: white; border: none; padding: 10px 20px; font-size: 1.1rem; border-radius: 50px; cursor: pointer; transition: transform 0.1s;">Support!</button>
         </div>
     `;
     
@@ -247,8 +261,8 @@ function renderMainView() {
 function renderNoView() {
     const content = document.getElementById('game-clear-content');
     content.innerHTML = `
-        <h2 style="color: #f1c40f; margin: 0 0 25px 0; font-size: 2rem;">喔</h2>
-        <button id="btn-confirm" style="background-color: #f1c40f; color: #2c3e50; border: none; padding: 12px 24px; font-size: 1.1rem; border-radius: 50px; cursor: pointer; font-weight: bold; transition: transform 0.1s;">確認</button>
+        <h2 style="color: #f1c40f; margin: 0 0 25px 0; font-size: 2rem;">Oh.</h2>
+        <button id="btn-confirm" style="background-color: #f1c40f; color: #2c3e50; border: none; padding: 12px 24px; font-size: 1.1rem; border-radius: 50px; cursor: pointer; font-weight: bold; transition: transform 0.1s;">Confirm</button>
     `;
     document.getElementById('btn-confirm').onclick = closeModal;
     addClickEffect('btn-confirm');
@@ -257,9 +271,9 @@ function renderNoView() {
 function renderYesView() {
     const content = document.getElementById('game-clear-content');
     content.innerHTML = `
-        <h2 style="color: #f1c40f; margin: 0 0 15px 0; font-size: 2rem;">開玩笑的哈哈</h2>
-        <p style="font-size: 1.2rem; margin-bottom: 25px; line-height: 1.5;">該不會有人真信了吧🤔<br>總之恭喜您通關遊戲</p>
-        <button id="btn-creator" style="background-color: #f1c40f; color: #2c3e50; border: none; padding: 12px 24px; font-size: 1.1rem; border-radius: 50px; cursor: pointer; font-weight: bold; transition: transform 0.1s;">創作者：shiRay</button>
+        <h2 style="color: #f1c40f; margin: 0 0 15px 0; font-size: 2rem;">Just Kidding Haha</h2>
+        <p style="font-size: 1.2rem; margin-bottom: 25px; line-height: 1.5;">Did anyone actually believe that?<br>Anyway, congratulations on clearing the game!</p>
+        <button id="btn-creator" style="background-color: #f1c40f; color: #2c3e50; border: none; padding: 12px 24px; font-size: 1.1rem; border-radius: 50px; cursor: pointer; font-weight: bold; transition: transform 0.1s;">Creator: shiRay</button>
     `;
     document.getElementById('btn-creator').onclick = closeModal;
     addClickEffect('btn-creator');
@@ -361,7 +375,7 @@ function initGame(forceReset = false) {
 }
 
 restartBtn.addEventListener('click', () => {
-    localStorage.removeItem('pikaBlastSave'); // 重新開始時清除存檔
+    localStorage.removeItem('pikaBlastSave'); 
     initGame(true);
 });
 
@@ -412,19 +426,17 @@ function bindScoreTaps() {
     
     let lastTapTime = 0;
     let clickTimer = null;
-    let isScoreTapLocked = false; // 新增：防連點的狀態鎖定
+    let isScoreTapLocked = false; 
 
     const handleScoreTap = (e) => {
-        // 如果目前正在執行飄移或合成動畫，直接忽略此次點擊
         if (isScoreTapLocked) return;
 
         const currentTime = new Date().getTime();
         const tapLength = currentTime - lastTapTime;
         
         if (tapLength > 0 && tapLength < 300) {
-            // 雙擊功能：輔助合成或各自飄移
             clearTimeout(clickTimer);
-            isScoreTapLocked = true; // 上鎖：開始動畫
+            isScoreTapLocked = true; 
             
             const allStickers = Array.from(document.querySelectorAll('.sticker'));
             const tier1Stickers = allStickers.filter(el => parseInt(el.dataset.tier || 1) === 1);
@@ -432,7 +444,6 @@ function bindScoreTaps() {
             
             let targetStickers = null;
             
-            // 判斷條件：低階優先
             if (tier1Stickers.length >= 15) {
                 targetStickers = tier1Stickers;
             } else if (tier2Stickers.length >= 15) {
@@ -440,20 +451,16 @@ function bindScoreTaps() {
             }
             
             if (targetStickers) {
-                // 滿足條件：隨機選出 15 隻進行輔助合成
                 const toMerge = targetStickers.sort(() => 0.5 - Math.random()).slice(0, 15);
                 const currentSize = parseFloat(toMerge[0].style.width) || TILE_SIZE;
-                
-                // 決定一個隨機聚集點
                 const pos = getRandomValidPosition(currentSize);
                 
                 toMerge.forEach(el => {
-                    el.style.pointerEvents = 'none'; // 合成鎖定機制：飛行中禁止拖曳
+                    el.style.pointerEvents = 'none'; 
                     el.classList.add('shuffling'); 
                     el.style.left = pos.x + 'px';
                     el.style.top = pos.y + 'px';
                     setTimeout(() => {
-                        // 確保元素還存在於畫面上才解除鎖定（避免被 checkMerge 移除後報錯）
                         if (document.body.contains(el)) {
                             el.classList.remove('shuffling');
                             el.style.pointerEvents = '';
@@ -461,16 +468,14 @@ function bindScoreTaps() {
                     }, 500);
                 });
                 
-                // 動畫結束後觸發合成、存檔並解鎖
                 setTimeout(() => {
                     checkMerge(toMerge[0]);
                     saveGame();
                     isScoreTapLocked = false; 
                 }, 550);
             } else {
-                // 未滿足條件：像原來一樣各自飄移 (打亂)
                 allStickers.forEach(el => {
-                    el.style.pointerEvents = 'none'; // 飄移鎖定機制：飛行中禁止拖曳
+                    el.style.pointerEvents = 'none'; 
                     el.classList.add('shuffling');
                     const currentSize = parseFloat(el.style.width) || TILE_SIZE;
                     const pos = getRandomValidPosition(currentSize);
@@ -485,20 +490,19 @@ function bindScoreTaps() {
                 });
                 setTimeout(() => {
                     saveGame();
-                    isScoreTapLocked = false; // 解鎖
+                    isScoreTapLocked = false; 
                 }, 550);
             }
             
             lastTapTime = 0;
             if (window.getSelection) window.getSelection().removeAllRanges();
         } else {
-            // 單擊功能：所有貼紙原地旋轉
             lastTapTime = currentTime;
             clickTimer = setTimeout(() => {
-                isScoreTapLocked = true; // 上鎖：開始旋轉動畫
+                isScoreTapLocked = true; 
                 const stickers = document.querySelectorAll('.sticker');
                 stickers.forEach(el => {
-                    el.style.pointerEvents = 'none'; // 旋轉鎖定機制
+                    el.style.pointerEvents = 'none'; 
                     el.classList.add('spinning'); 
                     let currentRot = parseFloat(el.dataset.rot || 0);
                     currentRot += 360;
@@ -513,7 +517,7 @@ function bindScoreTaps() {
                 });
                 setTimeout(() => {
                     saveGame();
-                    isScoreTapLocked = false; // 解鎖
+                    isScoreTapLocked = false; 
                 }, 850); 
                 lastTapTime = 0;
             }, 300);
@@ -699,7 +703,7 @@ function bindInputEvents() {
                 if (shapes.length === 0) {
                     generateShapes();
                 } else {
-                    saveGame(); // 沒有消除也存檔
+                    saveGame(); 
                 }
             }
         } else {
@@ -764,7 +768,7 @@ function generateShapes() {
         if (!isBatchAbsolutelySafe(grid, safeBatch)) {
             finalScoreElement.innerText = score;
             gameOverModal.classList.remove('hidden'); 
-            localStorage.removeItem('pikaBlastSave'); // 遊戲結束時清除存檔
+            localStorage.removeItem('pikaBlastSave'); 
             return;
         }
     }
@@ -863,7 +867,7 @@ function generateShapes() {
         shapes.push(shapeObj);
     }
     
-    saveGame(); // 生成新方塊後存檔
+    saveGame(); 
 }
 
 function getShapeSize(matrix) {
@@ -1042,6 +1046,9 @@ function checkAndAnimateLines() {
 }
 
 function runClearAnimation(rows, cols) {
+    blastSound.currentTime = 0;
+    blastSound.play().catch(e => console.warn("Blast sound prevented:", e));
+    
     isAnimating = true; 
     let opacity = 1.0; 
     
@@ -1120,7 +1127,7 @@ function finalizeClear(rows, cols) {
     if (shapes.length === 0) {
         generateShapes();
     } else {
-        saveGame(); // 方塊沒清空也要存檔
+        saveGame(); 
     }
 }
 
@@ -1225,14 +1232,24 @@ function checkMerge(droppedSticker) {
         avgCx /= 15;
         avgCy /= 15;
 
-        if (tier === 3) {
+        if (tier === 1) {
+            make1Sound.currentTime = 0;
+            make1Sound.play().catch(e => console.warn("Merge 1 sound prevented:", e));
+            spawnMergedSticker(avgCx, avgCy, 2);
+        } else if (tier === 2) {
+            make2Sound.currentTime = 0;
+            make2Sound.play().catch(e => console.warn("Merge 2 sound prevented:", e));
+            spawnMergedSticker(avgCx, avgCy, 3);
+        } else if (tier === 3) {
+            make3Sound.currentTime = 0;
+            make3Sound.play().catch(e => console.warn("Merge 3 sound prevented:", e));
             showGameClearScreen();
             spawnMergedSticker(avgCx, avgCy, 4);
         } else {
             spawnMergedSticker(avgCx, avgCy, tier + 1);
         }
     }
-    saveGame(); // 合併判定結束後存檔
+    saveGame(); 
 }
 
 function makeStickerDraggable(el) {
@@ -1252,7 +1269,7 @@ function makeStickerDraggable(el) {
             el.dataset.rot = currentRotation;
             el.style.setProperty('--rot', currentRotation + 'deg');
             lastTapTime = 0; 
-            saveGame(); // 旋轉後存檔
+            saveGame(); 
             return; 
         }
         lastTapTime = currentTime;
